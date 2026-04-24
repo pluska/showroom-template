@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Showroom Virtual Template
 
-## Getting Started
+A high-performance, data-driven Next.js template for creating virtual real estate showrooms. Designed for a "clone-and-fill" workflow, this template allows you to deploy a new project in minutes by simply updating data files and assets.
 
-First, run the development server:
+## 🚀 Quick Start
 
+### 1. Clone the Template
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/pluska/showroom-template.git your-project-name
+cd your-project-name
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure Environment
+Create a `.env.local` file:
+```bash
+NEXT_PUBLIC_ASSET_BASE_URL=https://your-assets-storage.com
+NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. "Fill" Your Project
+Update the project identity and data:
+- **Identity**: Edit `src/config/config.ts`
+- **Building**: Edit `src/data/buildingData.ts`
+- **Units & Floors**: Edit `src/data/floors.ts`
+- **Map**: Edit `src/data/locations.ts`
+- **Tours**: Edit `src/data/tours.ts`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Run Development
+```bash
+npm run dev
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 📂 Documentation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- [**CLONE_AND_FILL.md**](./CLONE_AND_FILL.md): Detailed step-by-step setup guide.
+- [**STRUCTURE.md**](./STRUCTURE.md): Overview of the project architecture and file organization.
+- [**RULES_AI.md**](./RULES_AI.md): Essential rules for AI coding assistants to maintain template integrity.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## ✨ Key Features
 
-## Deploy on Vercel
+- **360° Scene Controller**: Smooth transitions between building faces with background video support.
+- **Interactive Floor Plans**: SVG-based unit highlighting and status management.
+- **Virtual Tours Integration**: Seamless embedding of Matterport or similar 360° tours.
+- **Dynamic Map**: Custom Mapbox integration with route calculation.
+- **Mobile First**: Fully responsive design optimized for mobile showroom experiences.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🛠 Tech Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Framework**: Next.js 15+ (App Router)
+- **Styling**: Tailwind CSS
+- **Animations**: GSAP (GreenSock)
+- **State Management**: Zustand
+- **Maps**: React Map GL (Mapbox)
+- **Icons**: Lucide React
