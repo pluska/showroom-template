@@ -1,0 +1,325 @@
+"use client";
+import { useRef, useMemo, useState, useEffect } from 'react';
+import Map, { Marker, NavigationControl, FullscreenControl, ScaleControl, Source, Layer, Popup } from 'react-map-gl/mapbox';
+// import 'mapbox-gl/dist/mapbox-gl.css';
+import { MapPin } from 'lucide-react';
+import { locationsData } from '@/data/locations'; 
+import { getAssetUrl } from '@/utils/assets'; 
+
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
+const MAPBOX_STYLE = 'mapbox://styles/mapbox/light-v11';
+
+// Initial view state centering on Santa Fe 190, Pueblo Libre, Lima
+const INITIAL_VIEW_STATE = {
+  latitude: -12.07592,
+  longitude: -77.067632,
+  zoom: 16, 
+  bearing: 0,
+  pitch: 0
+};
+
+interface RouteStats {
+    duration: number; // seconds
+    distance: number; // meters
+}
+
+interface MapProps {
+    destination?: [number, number] | null; // [lng, lat]
+    origin?: [number, number] | null; // [lng, lat]
+    padding?: { top: number; bottom: number; left: number; right: number };
+    onMarkerClick?: (coordinates: [number, number], name?: string) => void;
+    transportMode?: 'driving' | 'walking' | 'cycling';
+    onRouteCalculated?: (stats: { driving: RouteStats; walking: RouteStats; cycling: RouteStats } | null) => void;
+    locations?: any[]; // Feature[]
+}
+
+export default function MapComponent({ destination, origin, padding, onMarkerClick, transportMode = 'driving', onRouteCalculated, locations }: MapProps) {
+  const mapRef = useRef<any>(null);
+  const [routeGeoJSON, setRouteGeoJSON] = useState<any>(null);
+  const [routeStats, setRouteStats] = useState<RouteStats | null>(null);
+
+  // Use passed locations or default to all if not provided (fallback)
+  const displayLocations = locations || locationsData.features;
+
+  // Fetch Route when destination changes
+  useEffect(() => {
+    const fetchRoute = async () => {
+        try {
+            if (!MAPBOX_TOKEN) return;
+
+            // Determine start and end points
+            let start: [number, number];
+            let end: [number, number];
+
+            if (destination && !origin) {
+                // Explore Mode: From Santa Fe TO Destination
+                start = [INITIAL_VIEW_STATE.longitude, INITIAL_VIEW_STATE.latitude];
+                end = destination;
+            } else if (origin) {
+                // Search Mode: From Origin TO Santa Fe
+                start = origin;
+                end = [INITIAL_VIEW_STATE.longitude, INITIAL_VIEW_STATE.latitude];
+            } else {
+                // No route to calculate
+                setRouteGeoJSON(null);
+                setRouteStats(null);
+                if (onRouteCalculated) onRouteCalculated(null);
+                return;
+            }
+
+            // Fetch estimates for all modes
+            const modes = ['driving', 'walking', 'cycling'] as const;
+            const requests = modes.map(mode => 
+                fetch(`https://api.mapbox.com/directions/v5/mapbox/${mode}/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${MAPBOX_TOKEN}`)
+                .then(res => res.json())
+            );
+
+            const results = await Promise.all(requests);
+            const stats: any = {};
+            let currentModeData: any = null;
+
+            results.forEach((json, index) => {
+                const mode = modes[index];
+                if (json.routes && json.routes.length > 0) {
+                    const data = json.routes[0];
+                    stats[mode] = {
+                        duration: data.duration,
+                        distance: data.distance
+                    };
+                    if (mode === transportMode) {
+                        currentModeData = data;
+                    }
+                } else {
+                    stats[mode] = { duration: 0, distance: 0 };
+                }
+            });
+
+            // Pass all stats to parent
+            if (onRouteCalculated) {
+                onRouteCalculated(stats);
+            }
+
+            // Render current mode route
+            if (currentModeData) {
+                const route = currentModeData.geometry.coordinates;
+                const geojson = {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: route
+                    }
+                };
+                
+                // Only update if changed prevents some internal re-renders but mainly we rely on parent fix
+                setRouteGeoJSON(geojson);
+                setRouteStats({
+                    duration: currentModeData.duration,
+                    distance: currentModeData.distance
+                });
+            }
+
+            // Fit bounds to show route
+            // We want to fit bounds when route changes OR padding changes
+            if (mapRef.current) {
+                const minLng = Math.min(start[0], end[0]);
+                const maxLng = Math.max(start[0], end[0]);
+                const minLat = Math.min(start[1], end[1]);
+                const maxLat = Math.max(start[1], end[1]);
+                
+                mapRef.current.fitBounds(
+                    [[minLng, minLat], [maxLng, maxLat]],
+                    { 
+                        padding: padding || { top: 50, bottom: 50, left: 50, right: 50 },
+                        maxZoom: 16,
+                        duration: 1000 // Smooth animation
+                    }
+                );
+            }
+
+        } catch (error) {
+            console.error("Error fetching directions:", error);
+        }
+    };
+
+    fetchRoute();
+  }, [destination, origin, padding, transportMode]);
+
+  const markers = useMemo(() => {
+    const list = displayLocations.map((feature: any) => (
+      <Marker
+        key={feature.id || feature.properties.nombre}
+        longitude={feature.geometry.coordinates[0]}
+        latitude={feature.geometry.coordinates[1]}
+        anchor="bottom"
+        onClick={(e: any) => {
+            e.originalEvent.stopPropagation();
+            if (onMarkerClick) onMarkerClick(feature.geometry.coordinates, feature.properties.nombre);
+        }}
+      >
+        <div className="relative group cursor-pointer hover:z-50">
+            {feature.properties.imagen ? (
+                <div className="w-12 h-12 bg-white rounded-full p-2 shadow-md flex items-center justify-center hover:scale-125 transition-transform border border-brand-orange/20">
+                    <img 
+                        src={`/${feature.properties.imagen}`}
+                        alt={feature.properties.nombre}
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            // If we wanted a fallback, we'd need state or a different structure. 
+                            // For now, if missing, it will show empty white circle.
+                        }}
+                    />
+                </div>
+            ) : (
+                <MapPin size={32} className="text-brand-orange drop-shadow-md hover:scale-125 transition-transform" />
+            )}
+        </div>
+      </Marker>
+    ));
+
+      // Add Origin Marker if exists
+      if (origin) {
+          list.push(
+              <Marker
+                  key="origin-marker"
+                  longitude={origin[0]}
+                  latitude={origin[1]}
+                  anchor="bottom"
+              >
+                  <div className="flex flex-col items-center z-50">
+                      <div className="bg-brand-orange text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg mb-1 whitespace-nowrap">
+                          Tu Ubicación
+                      </div>
+                      <MapPin size={28} className="text-brand-orange drop-shadow-md fill-current" />
+                  </div>
+              </Marker>
+          );
+      }
+
+      return list;
+  }, [onMarkerClick, origin, displayLocations]);
+
+  // Force Resize on Mount and Window Resize (Fix for gray areas)
+  useEffect(() => {
+    const handleResize = () => {
+        if (mapRef.current) {
+            mapRef.current.resize();
+        }
+    };
+
+    // Initial resize after mount (with small delay to ensure container is ready)
+    const timer = setTimeout(() => {
+        handleResize();
+    }, 100);
+
+    // Listen for window resize events (includes orientation change)
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+        clearTimeout(timer);
+        window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  return (
+    <div className="w-full h-full relative touch-none">
+      <Map
+        ref={mapRef}
+        initialViewState={INITIAL_VIEW_STATE}
+        style={{ width: '100%', height: '100%' }}
+        mapStyle={MAPBOX_STYLE}
+        mapboxAccessToken={MAPBOX_TOKEN}
+        attributionControl={false}
+        padding={padding}
+        scrollZoom={true}
+        dragPan={true}
+        dragRotate={true}
+        doubleClickZoom={true}
+      >
+        <NavigationControl position="top-right" />
+        <FullscreenControl position="top-right" />
+        <ScaleControl />
+
+        {/* Route Layer */}
+        {routeGeoJSON && (
+            <Source id="route" type="geojson" data={routeGeoJSON}>
+                <Layer
+                    id="route"
+                    type="line"
+                    source="route"
+                    layout={{
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    }}
+                    paint={{
+                        'line-color': '#ff6b00', // Brand Orange
+                        'line-width': 4,
+                        'line-opacity': 0.8
+                    }}
+                />
+            </Source>
+        )}
+
+        {markers}
+
+        {/* Santa Fe Marker (Main Project) */}
+        <Marker longitude={INITIAL_VIEW_STATE.longitude} latitude={INITIAL_VIEW_STATE.latitude} anchor="bottom" style={{ zIndex: 9999 }}>
+            <div className="relative flex flex-col items-center group cursor-pointer" style={{ zIndex: 9999 }}>
+                 {/* Popup Card - Hover Only */}
+                 <div className="absolute bottom-full mb-4 w-48 bg-white rounded-lg shadow-2xl overflow-hidden transition-all duration-300 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 pointer-events-none group-hover:pointer-events-auto">
+                    <div className="h-24 w-full relative">
+                        <img 
+                            src={getAssetUrl('building/photos/face_0_daylight.png')} 
+                            className="w-full h-full object-cover"
+                            alt="Santa Fe"
+                        />
+                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-gray-900/80 backdrop-blur-sm rounded text-[8px] font-bold text-white uppercase tracking-wider">
+                            Edificio Boutique
+                        </div>
+                    </div>
+                    <div className="p-2">
+                        <h3 className="text-xs font-bold text-gray-900 leading-tight mb-0.5">Santa Fe 190</h3>
+                    </div>
+                 </div>
+
+                 {/* Pin/Logo */}
+                 <div className="relative z-50 group-hover:scale-110 transition-transform duration-300">
+                     <div className="w-20 h-20 bg-white rounded-full p-2 shadow-xl border-2 border-brand-orange relative z-10 flex items-center justify-center">
+                        <img 
+                            src={getAssetUrl('identity/logo_full_black.png')} 
+                            className="w-full h-full object-contain" // Use contain to fit logo
+                            alt="Santa Fe Logo"
+                        />
+                     </div>
+                     {/* Triangle pointer */}
+                     <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-3 w-9 h-9 bg-brand-orange rotate-45 border-r border-b border-brand-orange/50 shadow-sm z-0"></div>
+                 </div>
+            </div>
+        </Marker>
+
+        {/* Route Info Popup */}
+        {destination && routeStats && (
+            <Popup
+                longitude={destination[0]}
+                latitude={destination[1]}
+                anchor="bottom"
+                offset={50} // Move it up above the pin
+                closeButton={false}
+                closeOnClick={false}
+                className="z-10"
+            >
+                <div className="p-2 text-center bg-white rounded-lg shadow-sm">
+                    <p className="text-lg font-bold text-gray-900 leading-none">
+                        {Math.round(routeStats.duration / 60)} <span className="text-xs font-normal text-gray-500">min</span>
+                    </p>
+                    <p className="text-xs font-medium text-brand-orange">
+                        {(routeStats.distance / 1000).toFixed(1)} km
+                    </p>
+                </div>
+            </Popup>
+        )}
+      </Map>
+    </div>
+  );
+}
