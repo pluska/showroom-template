@@ -1,0 +1,14 @@
+{
+  "sidebar": {
+    "intro": true,
+    "showroom": true,
+    "floors": true,
+    "amenities": true,
+    "tours": true,
+    "video": true,
+    "brochure": true,
+    "location": true,
+    "contact": true,
+    "topographic": false
+  }
+}

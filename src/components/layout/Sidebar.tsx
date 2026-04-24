@@ -1,13 +1,14 @@
 "use client";
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { X, Home, Building2, Layers,  Image, Rotate3D, Video, Download, MapPin, Phone, Facebook, Instagram } from 'lucide-react';
+import { X, Home, Building2, Layers,  Image, Rotate3D, Video, Download, MapPin, Phone, Facebook, Instagram, Mountain } from 'lucide-react';
 import { getAssetUrl } from '@/utils/assets';
 import { useStore } from '@/store/useStore';
 import { preloadImages, preloadVideo } from '@/utils/preload';
 import { buildingFaces } from '@/data/buildingData';
 import { floorsData } from '@/data/floors';
 import config from '@/config/config';
+import features from '@/data/features.json';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -55,17 +56,21 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     }
   }, [isOpen]);
 
-  const menuItems = [
-    { icon: Home, label: 'Intro', path: '/' },
-    { icon: Building2, label: 'El edificio', path: '/showroom', preloadKey: 'showroom' },
-    { icon: Layers, label: 'Plantas', path: '/plantas', preloadKey: 'floors' }, 
-    { icon: Image, label: 'Amenidades', path: '/galeria', preloadKey: 'amenities' },
-    { icon: Rotate3D, label: 'Recorridos', path: '/recorridos' },
-    { icon: Video, label: 'Video', path: '/video' },
-    { icon: Download, label: 'Brochure', action: 'brochure' },
-    { icon: MapPin, label: 'Ubicación', path: '/ubicacion' },
-    { icon: Phone, label: 'Contacto', path: '/contact' },
+  const allMenuItems = [
+    { id: 'intro', icon: Home, label: 'Intro', path: '/' },
+    { id: 'showroom', icon: Building2, label: 'El edificio', path: '/showroom', preloadKey: 'showroom' },
+    { id: 'floors', icon: Layers, label: 'Plantas', path: '/plantas', preloadKey: 'floors' }, 
+    { id: 'amenities', icon: Image, label: 'Amenidades', path: '/galeria', preloadKey: 'amenities' },
+    { id: 'tours', icon: Rotate3D, label: 'Recorridos', path: '/recorridos' },
+    { id: 'topographic', icon: Mountain, label: 'Topografía', path: '/topography' },
+    { id: 'video', icon: Video, label: 'Video', path: '/video' },
+    { id: 'brochure', icon: Download, label: 'Brochure', action: 'brochure' },
+    { id: 'location', icon: MapPin, label: 'Ubicación', path: '/ubicacion' },
+    { id: 'contact', icon: Phone, label: 'Contacto', path: '/contact' },
   ];
+
+  // Filter menu items based on features.json
+  const menuItems = allMenuItems.filter(item => (features.sidebar as any)[item.id] !== false);
 
   const toggleBrochure = useStore(state => state.toggleBrochure);
 
