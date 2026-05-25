@@ -29,7 +29,7 @@ export default function RootLayout({
         <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
       </head>
       <body
-        className={`${montserrat.variable} ${inter.variable} antialiased h-screen w-screen overflow-hidden bg-black text-white`}
+        className={`${montserrat.variable} ${inter.variable} antialiased h-screen w-screen overflow-hidden bg-base-100 text-base-content`}
       >
         {children}
       </body>

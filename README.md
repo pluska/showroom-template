@@ -2,38 +2,61 @@
 
 A high-performance, data-driven Next.js template for creating virtual real estate showrooms. Designed for a "clone-and-fill" workflow, this template allows you to deploy a new project in minutes by simply updating data files and assets.
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
-### 1. Clone the Template
-```bash
-git clone https://github.com/pluska/showroom-template.git your-project-name
-cd your-project-name
-npm install
-```
+### 1. Initialization
 
-### 2. Configure Environment
-Create a `.env.local` file:
-```bash
-NEXT_PUBLIC_ASSET_BASE_URL=https://your-assets-storage.com
-NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token
-```
+Follow these steps to set up the project for the first time:
 
-### 3. "Fill" Your Project
-Update the project identity and data:
-- **Identity**: Edit `src/config/config.ts`
-- **Building**: Edit `src/data/buildingData.ts`
-- **Units & Floors**: Edit `src/data/floors.ts`
-- **Map**: Edit `src/data/locations.ts`
-- **Tours**: Edit `src/data/tours.ts`
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/pluska/showroom-template.git your-project-name
+   cd your-project-name
+   ```
 
-### 4. Run Development
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment:**
+   Copy the example environment file and fill in your credentials:
+   ```bash
+   cp .env.example .env.local
+   ```
+   *Note: Ensure you set at least `NEXTAUTH_SECRET`, `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`, and `NEXT_PUBLIC_ASSET_BASE_URL`.*
+
+4. **Initialize Database:**
+   This project uses Cloudflare D1. Initialize your local database with migrations and seed data:
+   ```bash
+   # Generate migrations from schema
+   npm run db:generate
+
+   # Apply migrations to local D1 instance
+   npm run db:migrate
+
+   # (Optional) Seed the database with initial data
+   npm run db:seed
+   ```
+
+### 2. Running Locally
+
+Once initialized, you can run the project in development mode:
+
+**Standard Next.js Development:**
 ```bash
 npm run dev
 ```
 
+**Cloudflare Pages Environment (Recommended for D1/R2 features):**
+```bash
+npm run dev:pages
+```
+The application will be available at [http://localhost:3000](http://localhost:3000).
+
 ---
 
-## 📂 Documentation
+## 📂 Project Documentation
 
 - [**CLONE_AND_FILL.md**](./CLONE_AND_FILL.md): Detailed step-by-step setup guide.
 - [**STRUCTURE.md**](./STRUCTURE.md): Overview of the project architecture and file organization.

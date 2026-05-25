@@ -15,11 +15,14 @@ Open `src/config/config.ts` and update all the placeholders with your project's 
 - `company` and `buildingSocials` information
 
 ## 3. Set Up Environment Variables
-Create a `.env.local` file in the root directory and add the following variable:
+Copy the example environment file and fill in your project's credentials:
 ```bash
-NEXT_PUBLIC_ASSET_BASE_URL=https://your-assets-storage-url.com
+cp .env.example .env.local
 ```
-This URL should point to the folder containing your project's images and videos.
+Key variables to configure:
+- `NEXT_PUBLIC_ASSET_BASE_URL`: URL pointing to the folder containing your project's images and videos.
+- `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`: Mapbox token for location maps.
+- `NEXTAUTH_SECRET`: Secret key for authentication sessions.
 
 ## 4. Fill Data Files
 Update the following files in `src/data/` with your project data:
@@ -33,10 +36,14 @@ Update the following files in `src/data/` with your project data:
 ## 5. Update Asset Manifest
 Add all the asset paths that need to be preloaded to `src/data/asset-manifest.ts`. This ensures a smoother user experience as assets are loaded in the background.
 
-## 6. Build and Deploy
+## 6. Run Locally & Deploy
 Verify everything works locally:
 ```bash
+# Standard Next.js dev server
 npm run dev
+
+# Or Cloudflare Pages dev server (recommended for D1/R2 compatibility)
+npm run dev:pages
 ```
 When ready, build the project:
 ```bash

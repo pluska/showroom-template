@@ -1,0 +1,9 @@
+name = "showroom-dashboard"
+compatibility_date = "2024-04-01"
+pages_build_output_dir = ".vercel/output/static"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "showroom-db"
+database_id = "your-d1-database-id-here" # Replace with your actual D1 ID
+migrations_dir = "drizzle"
