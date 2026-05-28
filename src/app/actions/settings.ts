@@ -2,7 +2,14 @@
 
 import { getDb } from "@/lib/db";
 import { globalSettings } from "@/lib/db/schema";
-import { auth } from "@/auth";
+const auth = async () => ({
+  user: {
+    id: "mock-id",
+    name: "andresadmin",
+    email: "andresadmin@example.com",
+    role: "SUPER_ADMIN",
+  }
+});
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 

@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "wrangler d1 migrations apply showroom-db --local --yes",
+    "db:migrate": "wrangler d1 migrations apply showroom-db --local",
     "db:studio": "drizzle-kit studio",
     "db:seed": "wrangler d1 execute showroom-db --local --file=./src/lib/db/seed.sql"
   },

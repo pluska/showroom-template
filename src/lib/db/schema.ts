@@ -32,6 +32,7 @@ export const floors = sqliteTable('floors', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   name: text('name').notNull(),
   level: integer('level').notNull(),
+  type: text('type').default('Piso').notNull(), // 'Planta Baja', 'Piso', 'Terraza', 'Sótano', 'Azotea'
   imagePath: text('image_path'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
@@ -47,10 +48,15 @@ export const units = sqliteTable('units', {
   bathrooms: integer('bathrooms'),
   areaSqm: integer('area_sqm'),
   coordinates: text('coordinates', { mode: 'json' }), 
-  state: text('state').default('AVAILABLE').notNull(), // 'AVAILABLE', 'RESERVED', 'SOLD'
+  state: text('state').default('AVAILABLE').notNull(), // 'AVAILABLE', 'RESERVED', 'SOLD', 'COMMON_AREA'
   buyerName: text('buyer_name'), 
   gallery: text('gallery', { mode: 'json' }), 
   renders: text('renders', { mode: 'json' }), 
+  photosFurnished: text('photos_furnished', { mode: 'json' }),
+  photosUnfurnished: text('photos_unfurnished', { mode: 'json' }),
+  photosPlans: text('photos_plans', { mode: 'json' }),
+  photosBalcony: text('photos_balcony', { mode: 'json' }),
+  tourUrl: text('tour_url'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }),
@@ -87,4 +93,15 @@ export const constructionProgress = sqliteTable('construction_progress', {
   description: text('description'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+});
+
+export const logs = sqliteTable('logs', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id'),
+  userName: text('user_name'),
+  action: text('action').notNull(), // 'CREATE', 'UPDATE', 'DELETE'
+  entityType: text('entity_type').notNull(), // 'floor', 'unit'
+  entityId: text('entity_id').notNull(),
+  details: text('details'), // JSON string with details of the change
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });

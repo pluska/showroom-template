@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     // Initialize Resend inside the handler to avoid build-time errors
     const resend = new Resend(process.env.RESEND_API_KEY);
     
-    const body = await request.json();
+    const body = (await request.json()) as any;
     const { 
         nombres, 
         apellido, 
