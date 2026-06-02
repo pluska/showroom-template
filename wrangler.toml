@@ -7,3 +7,7 @@ binding = "DB"
 database_name = "showroom-db"
 database_id = "your-d1-database-id-here" # Replace with your actual D1 ID
 migrations_dir = "drizzle"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "template-testing"

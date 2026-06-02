@@ -1,12 +1,34 @@
-import { X, Download, FileText } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, Download, FileText, Loader2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getAssetUrl } from '../../utils/assets';
-
-const BROCHURE_URL = getAssetUrl('brochure/brochure.pdf');
 
 const BrochureModal = () => {
     const isOpen = useStore(state => state.isBrochureOpen);
     const close = useStore(state => state.toggleBrochure);
+    
+    const [brochureUrl, setBrochureUrl] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (isOpen && !brochureUrl) {
+            setIsLoading(true);
+            fetch('/api/brochure/active')
+                .then(res => res.json() as Promise<{ url?: string }>)
+                .then(data => {
+                    if (data && data.url) {
+                        setBrochureUrl(getAssetUrl(data.url));
+                    } else {
+                        close(false);
+                    }
+                })
+                .catch(e => {
+                    console.error(e);
+                    close(false);
+                })
+                .finally(() => setIsLoading(false));
+        }
+    }, [isOpen, brochureUrl, close]);
 
     if (!isOpen) return null;
 
@@ -27,14 +49,16 @@ const BrochureModal = () => {
                     </div>
                     
                     <div className="flex items-center gap-4">
-                        <a 
-                            href={BROCHURE_URL} 
-                            download="Showroom_SantaFe_Brochure.pdf"
-                            className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white text-neutral-900 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gray-200 transition-colors"
-                        >
-                            <Download size={16} />
-                            Download PDF
-                        </a>
+                        {brochureUrl && (
+                            <a 
+                                href={brochureUrl} 
+                                download="Showroom_SantaFe_Brochure.pdf"
+                                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white text-neutral-900 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gray-200 transition-colors"
+                            >
+                                <Download size={16} />
+                                Download PDF
+                            </a>
+                        )}
                         <button 
                             onClick={() => close(false)}
                             className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center hover:bg-neutral-700 transition-colors text-white"
@@ -45,21 +69,30 @@ const BrochureModal = () => {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 bg-neutral-200 relative">
-                    <iframe 
-                        src={BROCHURE_URL} 
-                        className="w-full h-full border-0"
-                        title="Brochure PDF Preview"
-                    />
-                    
-                    {/* Mobile Download FAB (Floating Action Button) if header button hidden */}
-                    <a 
-                        href={BROCHURE_URL} 
-                        download
-                        className="sm:hidden absolute bottom-6 right-6 w-14 h-14 bg-brand-primary text-white rounded-full shadow-xl flex items-center justify-center hover:bg-brand-dark-orange transition-colors z-10"
-                    >
-                        <Download size={24} />
-                    </a>
+                <div className="flex-1 bg-neutral-200 relative flex items-center justify-center">
+                    {isLoading || !brochureUrl ? (
+                        <div className="flex flex-col items-center justify-center gap-2 text-neutral-500">
+                            <Loader2 className="w-8 h-8 animate-spin" />
+                            <p>Cargando brochure...</p>
+                        </div>
+                    ) : (
+                        <>
+                            <iframe 
+                                src={brochureUrl} 
+                                className="w-full h-full border-0"
+                                title="Brochure PDF Preview"
+                            />
+                            
+                            {/* Mobile Download FAB (Floating Action Button) if header button hidden */}
+                            <a 
+                                href={brochureUrl} 
+                                download
+                                className="sm:hidden absolute bottom-6 right-6 w-14 h-14 bg-brand-primary text-white rounded-full shadow-xl flex items-center justify-center hover:bg-brand-dark-orange transition-colors z-10"
+                            >
+                                <Download size={24} />
+                            </a>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

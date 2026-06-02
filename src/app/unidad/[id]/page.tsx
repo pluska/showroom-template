@@ -5,6 +5,7 @@ import { ArrowLeft, Share2, X, MoreVertical, Menu, Ruler, Bed, Bath, PanelRightO
 import { floorsData, UnitStatusString } from '@/data/floors';
 import Sidebar from '@/components/layout/Sidebar';
 import RequestInfoModal from '@/components/modals/RequestInfoModal';
+import BrochureModal from '@/components/modals/BrochureModal';
 import InlineGallery from '@/components/gallery/InlineGallery';
 import TourHeader from '@/components/UI/TourHeader';
 import { preloadImages, preloadVideo } from '@/utils/preload';
@@ -36,6 +37,19 @@ const UnitPage = () => {
 
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isLoadingNav, setIsLoadingNav] = useState(false);
+  
+  const [hasBrochure, setHasBrochure] = useState<boolean>(false);
+
+  useEffect(() => {
+    fetch('/api/brochure/active')
+      .then(res => res.json() as Promise<{ url?: string }>)
+      .then(data => {
+        if (data && data.url) {
+          setHasBrochure(true);
+        }
+      })
+      .catch(err => console.error("Error fetching brochure:", err));
+  }, []);
   
   // --- ASSET RESOLUTION HELPERS ---
   const getTransitionUrl = (assetId: string, type: string) => {
@@ -295,13 +309,14 @@ const UnitPage = () => {
       {/* GLOBAL SIDEBAR */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      {/* MODAL */}
+      {/* MODALS */}
       <RequestInfoModal 
         isOpen={isRequestModalOpen} 
         onClose={() => setIsRequestModalOpen(false)} 
         unitId={unit.id} 
         floorId={floor.id} 
       />
+      <BrochureModal />
 
       {/* GLOBAL SIDEBAR TOGGLE */}
       {/* GLOBAL CONTROLS (Left) */}
@@ -492,20 +507,22 @@ const UnitPage = () => {
         {/* Footer Actions */}
         <div className="p-6 border-t border-gray-100 bg-white w-full xl:min-w-[420px] flex flex-col gap-4">
              {/* Brochure & Disclaimer Group (Row on Mobile/Landscape, Stacked on Desktop) */}
-             <div className="flex flex-row items-center gap-4 lg:flex-col lg:gap-6">
-                 {/* Brochure Button */}
-                 <button 
-                    onClick={() => {
-                        useStore.getState().toggleBrochure(true);
-                    }}
-                    className="flex-1 lg:w-full py-4 bg-brand-primary text-white rounded-xl font-bold text-sm transition-colors shadow-sm border border-gray-100"
-                 >
-                     Ver Brochure
-                 </button>
+             {hasBrochure && (
+                 <div className="flex flex-row items-center gap-4 lg:flex-col lg:gap-6">
+                     {/* Brochure Button */}
+                     <button 
+                        onClick={() => {
+                            useStore.getState().toggleBrochure(true);
+                        }}
+                        className="flex-1 lg:w-full py-4 bg-brand-primary text-white rounded-xl font-bold text-sm transition-colors shadow-sm border border-gray-100"
+                     >
+                         Ver Brochure
+                     </button>
 
-                 {/* Disclaimer */}
-                 <p className="flex-1 text-center text-xs text-gray-400 font-medium whitespace-nowrap lg:whitespace-normal">Disclaimer</p>
-             </div>
+                     {/* Disclaimer */}
+                     <p className="flex-1 text-center text-xs text-gray-400 font-medium whitespace-nowrap lg:whitespace-normal">Disclaimer</p>
+                 </div>
+             )}
 
              {/* Request Info Button (Row Style) */}
              {unit.subtitle !== 'Terraza' && (

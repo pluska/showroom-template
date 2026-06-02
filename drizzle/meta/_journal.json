@@ -15,6 +15,13 @@
       "when": 1780009081185,
       "tag": "0001_real_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780440378190,
+      "tag": "0002_open_goblin_queen",
+      "breakpoints": true
     }
   ]
 }
