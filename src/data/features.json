@@ -1,16 +1,14 @@
-{
-  "sidebar": {
-    "intro": true,
-    "showroom": true,
-    "maqueta": true,
-    "floors": true,
-    "amenities": true,
-    "tours": true,
-    "video": true,
-    "brochure": true,
-    "location": true,
-    "avance": true,
-    "contact": true,
-    "topographic": false
-  }
-}
+[
+  { "id": "intro", "icon": "Home", "label": "Intro", "path": "/", "active": true },
+  { "id": "showroom", "icon": "Building2", "label": "El edificio", "path": "/showroom", "preloadKey": "showroom", "active": true },
+  { "id": "maqueta", "icon": "Box", "label": "Maqueta 3D", "path": "/maqueta", "active": true },
+  { "id": "floors", "icon": "Layers", "label": "Plantas", "path": "/plantas", "preloadKey": "floors", "active": true }, 
+  { "id": "amenities", "icon": "Image", "label": "Amenidades", "path": "/galeria", "preloadKey": "amenities", "active": true },
+  { "id": "tours", "icon": "Rotate3D", "label": "Recorridos", "path": "/recorridos", "active": true },
+  { "id": "topographic", "icon": "Mountain", "label": "Topografía", "path": "/topography", "active": false },
+  { "id": "video", "icon": "Video", "label": "Video", "path": "/video", "active": true },
+  { "id": "brochure", "icon": "Download", "label": "Brochure", "path": "", "action": "brochure", "active": true },
+  { "id": "location", "icon": "MapPin", "label": "Ubicación", "path": "/ubicacion", "active": true },
+  { "id": "avance", "icon": "Construction", "label": "Avance de obra", "path": "/avance-de-obra", "active": true },
+  { "id": "contact", "icon": "Phone", "label": "Contacto", "path": "/contact", "active": true }
+]

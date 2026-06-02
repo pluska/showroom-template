@@ -1,25 +1,19 @@
-"use client";
+export const runtime = 'edge';
 
-import { use } from "react";
-import { Settings } from "lucide-react";
+import { getFeatures } from "@/app/actions/features";
+import FeaturesClient from "@/components/dashboard/features/FeaturesClient";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const initialFeatures = await getFeatures();
+
   return (
-    <div className="flex flex-col gap-6 max-w-4xl animate-fade-in">
-      <div>
+    <div className="flex flex-col gap-6 animate-fade-in justify-center items-center w-full">
+      <div className="w-full align-start">
         <h1 className="text-2xl font-bold font-primary text-brand-orange">Features</h1>
-        <p className="text-gray-500 text-sm font-secondary">Configuración global de características y especificaciones del showroom.</p>
+        <p className="text-gray-500 text-sm font-secondary">Configuración global de características y módulos en el sidebar del showroom.</p>
       </div>
 
-      <div className="bg-base-100 rounded-lg shadow-sm border border-base-200 p-8 flex flex-col items-center justify-center min-h-[350px] text-center">
-        <div className="p-4 rounded-full bg-base-200 text-brand-orange mb-4">
-          <Settings className="w-12 h-12" />
-        </div>
-        <h3 className="text-lg font-bold font-primary">Módulo en Desarrollo</h3>
-        <p className="text-gray-500 text-sm max-w-md mt-2">
-          Este módulo está siendo preparado para su próxima implementación. Pronto podrás gestionar aquí toda la información relacionada con features.
-        </p>
-      </div>
+      <FeaturesClient initialFeatures={initialFeatures} />
     </div>
   );
 }
