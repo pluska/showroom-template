@@ -1,25 +1,39 @@
-"use client";
+import { auth } from "@/auth";
+import { getProgressUpdates } from "@/app/actions/progress";
+import ProgressDashboard from "@/components/dashboard/progress/ProgressDashboard";
 
-import { use } from "react";
-import { Hammer } from "lucide-react";
+export const runtime = "edge";
 
-export default function HammerPage() {
+export const metadata = {
+  title: "Gestión de Avances de Obra - Dashboard",
+};
+
+export default async function ProgressPage() {
+  const session = await auth();
+  
+  const currentUser = {
+    id: session?.user?.id || "mock-id",
+    name: session?.user?.name || "Dev User",
+    email: session?.user?.email || "dev@example.com",
+    role: (session?.user?.role as string) || "SUPER_ADMIN",
+  };
+
+  const updates = await getProgressUpdates();
+
+  const serializedUpdates = updates.map((u) => ({
+    id: u.id,
+    title: u.title,
+    date: new Date(u.date),
+    mediaUrl: u.mediaUrl,
+    description: u.description,
+    createdAt: u.createdAt ? new Date(u.createdAt) : null,
+    deletedAt: u.deletedAt ? new Date(u.deletedAt) : null,
+  }));
+
   return (
-    <div className="flex flex-col gap-6 max-w-4xl animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold font-primary text-brand-orange">Avances de Obra</h1>
-        <p className="text-gray-500 text-sm font-secondary">Controla el avance de construcción y sube reportes fotográficos.</p>
-      </div>
-
-      <div className="bg-base-100 rounded-lg shadow-sm border border-base-200 p-8 flex flex-col items-center justify-center min-h-[350px] text-center">
-        <div className="p-4 rounded-full bg-base-200 text-brand-orange mb-4">
-          <Hammer className="w-12 h-12" />
-        </div>
-        <h3 className="text-lg font-bold font-primary">Módulo en Desarrollo</h3>
-        <p className="text-gray-500 text-sm max-w-md mt-2">
-          Este módulo está siendo preparado para su próxima implementación. Pronto podrás gestionar aquí toda la información relacionada con avances de obra.
-        </p>
-      </div>
-    </div>
+    <ProgressDashboard 
+      initialUpdates={serializedUpdates} 
+      currentUser={currentUser} 
+    />
   );
 }
