@@ -29,6 +29,20 @@
       "when": 1780442746112,
       "tag": "0003_giant_jane_foster",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780675526990,
+      "tag": "0004_mysterious_nekra",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1780677522926,
+      "tag": "0005_zippy_taskmaster",
+      "breakpoints": true
     }
   ]
 }

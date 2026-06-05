@@ -1,25 +1,64 @@
-"use client";
+import { getToursAdmin } from "@/app/actions/tours";
+import { getUnits } from "@/app/actions/units";
+import { getMedia } from "@/app/actions/media";
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import ToursDashboard from "@/components/dashboard/tours/ToursDashboard";
 
-import { use } from "react";
-import { Route } from "lucide-react";
+export default async function ToursPage() {
+  const session = await auth();
 
-export default function RoutePage() {
+  // If session is present but user role is not authorized, redirect
+  // Note: dashboard layout allows mock fallback, but let's obtain current role
+  const role = (session?.user?.role as string) || "SUPER_ADMIN";
+  if (role !== "SUPER_ADMIN" && role !== "ADMIN") {
+    redirect("/dashboard");
+  }
+
+  const [toursList, unitsList, mediaList] = await Promise.all([
+    getToursAdmin(),
+    getUnits(),
+    getMedia()
+  ]);
+
+  // Serialize models for client consumption (Date objects stringified/handled by Next.js if needed)
+  const serializedTours = toursList.map((t) => ({
+    id: t.id,
+    title: t.title,
+    subtitle: t.subtitle || "",
+    thumbnailUrl: t.thumbnailUrl,
+    type: t.type as "building" | "unit",
+    targetUrl: t.targetUrl,
+    unitId: t.unitId || "",
+    isActive: t.isActive,
+    order: t.order,
+    createdAt: t.createdAt ? t.createdAt.toISOString() : null,
+    unitIdentifier: t.unitIdentifier || null,
+    floorName: t.floorName || null,
+  }));
+
+  const serializedUnits = unitsList.map((u) => ({
+    id: u.id,
+    identifier: u.identifier,
+    floorId: u.floorId,
+    tourUrl: u.tourUrl || "",
+  }));
+
+  const serializedMedia = mediaList.map((m) => ({
+    id: m.id,
+    title: m.title,
+    url: m.url,
+    category: m.category,
+  }));
+
   return (
-    <div className="flex flex-col gap-6 max-w-4xl animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold font-primary text-brand-orange">Recorridos</h1>
-        <p className="text-gray-500 text-sm font-secondary">Configura e integra enlaces a los recorridos virtuales 3D.</p>
-      </div>
-
-      <div className="bg-base-100 rounded-lg shadow-sm border border-base-200 p-8 flex flex-col items-center justify-center min-h-[350px] text-center">
-        <div className="p-4 rounded-full bg-base-200 text-brand-orange mb-4">
-          <Route className="w-12 h-12" />
-        </div>
-        <h3 className="text-lg font-bold font-primary">Módulo en Desarrollo</h3>
-        <p className="text-gray-500 text-sm max-w-md mt-2">
-          Este módulo está siendo preparado para su próxima implementación. Pronto podrás gestionar aquí toda la información relacionada con recorridos.
-        </p>
-      </div>
-    </div>
+    <ToursDashboard 
+      initialTours={serializedTours} 
+      units={serializedUnits} 
+      media={serializedMedia}
+      currentUser={{
+        role: role
+      }}
+    />
   );
 }

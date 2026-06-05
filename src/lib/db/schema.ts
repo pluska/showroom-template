@@ -108,3 +108,19 @@ export const logs = sqliteTable('logs', {
   details: text('details'), // JSON string with details of the change
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
+
+export const tours = sqliteTable('tours', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  title: text('title').notNull(),
+  subtitle: text('subtitle'),
+  thumbnailUrl: text('thumbnail_url').notNull(),
+  type: text('type').default('building').notNull(), // 'building' | 'unit'
+  targetUrl: text('target_url').notNull(),
+  unitId: text('unit_id').references(() => units.id).unique(),
+  isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
+  order: integer('order').default(0).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+});
+
