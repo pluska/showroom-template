@@ -7,6 +7,7 @@ import FullScreenToggle from '@/components/UI/FullScreenToggle';
 import { Menu, ChevronLeft, ChevronRight } from 'lucide-react'; 
 import { preloadImages } from '@/utils/preload';
 import { useStore } from '@/store/useStore';
+import { getActiveMedia } from '@/app/actions/media';
 
 const GalleryPage = () => {
   const [activeTabId, setActiveTabId] = useState(galleries[0]?.id || 'general');
@@ -19,44 +20,57 @@ const GalleryPage = () => {
      return galleries.find(g => g.id === activeTabId) || galleries[0];
   }, [activeTabId]);
 
-  // 2. Load Images from Manifest
+  // 2. Load Images from Manifest or Database
   useEffect(() => {
     setCurrentIndex(0); // Reset index on tab change
     setGlobalLoading(true);
     
-    // Simulate a brief loading time for smoothness/Asset discovery
-    const timer = setTimeout(() => {
-        if (activeGalleryBase?.folderPrefix) {
-            const prefix = activeGalleryBase.folderPrefix;
-            const matchingAssets = assetManifest.filter(path => path.startsWith(prefix));
-            
-            const images: GalleryImage[] = matchingAssets.map(path => {
-                const filename = path.split('/').pop() || path;
-                const name = filename.split('.')[0].replace(/_/g, ' ').replace(/-/g, ' ');
-                let title = name.charAt(0).toUpperCase() + name.slice(1);
-                if (/^\d+$/.test(title)) title = `Amenity ${title}`;
-                
-                return {
-                    id: path,
-                    src: getAssetUrl(path),
-                    alt: title,
-                    title: title
-                };
-            });
-            setDynamicImages(images);
-        } else {
-            setDynamicImages([]);
-        }
-        setGlobalLoading(false);
-    }, 300); // 300ms min loading time to prevent flicker
+    // Si estamos en la galería de amenidades, cargamos de la base de datos
+    getActiveMedia("AMENITIES_GALLERY").then((dbMedia) => {
+         const timer = setTimeout(() => {
+             // Mapear los resultados de la base de datos a GalleryImage
+             const dbImages: GalleryImage[] = dbMedia.map(m => ({
+                 id: m.id,
+                 src: getAssetUrl(m.url),
+                 alt: m.title,
+                 title: m.title
+             }));
 
-    return () => clearTimeout(timer);
+             // Si hay imágenes de la DB (amenidades), las usamos.
+             // Si no hay (o si estamos en otra pestaña de la galería que usa el manifest), 
+             // podemos hacer fallback al manifest, pero como el requerimiento es gestionar
+             // la galería desde el panel, daremos prioridad a la DB.
+             if (dbImages.length > 0) {
+                 setDynamicImages(dbImages);
+             } else if (activeGalleryBase?.folderPrefix) {
+                 const prefix = activeGalleryBase.folderPrefix;
+                 const matchingAssets = assetManifest.filter(path => path.startsWith(prefix));
+                 
+                 const images: GalleryImage[] = matchingAssets.map(path => {
+                     const filename = path.split('/').pop() || path;
+                     const name = filename.split('.')[0].replace(/_/g, ' ').replace(/-/g, ' ');
+                     let title = name.charAt(0).toUpperCase() + name.slice(1);
+                     if (/^\d+$/.test(title)) title = `Amenity ${title}`;
+                     
+                     return {
+                         id: path,
+                         src: getAssetUrl(path),
+                         alt: title,
+                         title: title
+                     };
+                 });
+                 setDynamicImages(images);
+             } else {
+                 setDynamicImages([]);
+             }
+             setGlobalLoading(false);
+         }, 300); // 300ms min loading time to prevent flicker
+       });
+
   }, [activeGalleryBase, setGlobalLoading]);
 
   const displayImages = useMemo(() => {
       // If gallery base has hardcoded images (from mock), use them, else use dynamic, or mix
-      // The original migration logic suggests galleries.ts might be empty and rely on dynamic
-      // But let's support both
       return [...(activeGalleryBase?.images || []), ...dynamicImages];
   }, [activeGalleryBase, dynamicImages]);
 

@@ -39,17 +39,25 @@ import { connection } from "next/server";
 export async function getFeatures(): Promise<SidebarFeature[]> {
   await connection();
   try {
-    const dbFeatures = await getSetting("sidebar_features_list");
-    if (dbFeatures && Array.isArray(dbFeatures) && dbFeatures.length > 0) {
-      return dbFeatures;
-    }
+    let dbFeatures = await getSetting("sidebar_features_list");
     
     // Seed database if not existing
-    await updateSetting("sidebar_features_list", defaultSidebarFeatures);
-    return defaultSidebarFeatures;
+    if (!dbFeatures || !Array.isArray(dbFeatures) || dbFeatures.length === 0) {
+      await updateSetting("sidebar_features_list", defaultSidebarFeatures);
+      dbFeatures = defaultSidebarFeatures;
+    }
+    
+    // Si no hay video, esconde la opción en el sidebar
+    const { getActiveMedia } = await import("@/app/actions/media");
+    const activeVideo = await getActiveMedia("VIDEO_SIDEBAR");
+    if (!activeVideo || activeVideo.length === 0) {
+       dbFeatures = dbFeatures.filter((f: SidebarFeature) => f.path !== "/video");
+    }
+
+    return dbFeatures;
   } catch (error) {
     console.error("Error reading features from DB:", error);
-    return defaultSidebarFeatures;
+    return defaultSidebarFeatures.filter(f => f.path !== "/video"); // default to hiding if error just in case, or maybe not
   }
 }
 

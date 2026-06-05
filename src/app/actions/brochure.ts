@@ -78,26 +78,22 @@ export async function uploadBrochure(formData: FormData) {
       });
       uploadedToR2 = true;
 
+      const isDev = process.env.NODE_ENV === 'development';
       const r2PublicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-      url = `${r2PublicUrl}/${url}`;
+      
+      if (isDev) {
+        url = `/api/r2/${url}`;
+      } else {
+        url = `${r2PublicUrl}/${url}`;
+      }
     }
   } catch (e) {
     // getRequestContext might throw if not running in edge / next-on-pages context
   }
 
-  // Fallback to local filesystem if R2 binding isn't available (e.g. local dev)
+  // Fallback eliminados por compatibilidad con Edge Runtime. Todo uso debe ser mediante R2.
   if (!uploadedToR2) {
-    try {
-      const fs = await import('fs/promises');
-      const path = await import('path');
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const filePath = path.join(process.cwd(), 'public', 'brochure', fileName);
-      await fs.mkdir(path.dirname(filePath), { recursive: true });
-      await fs.writeFile(filePath, buffer);
-    } catch (error) {
-      console.error("Error saving file locally, skipping for edge runtime:", error);
-    }
+    throw new Error("No se pudo subir a R2. Verifica tu configuración de Cloudflare Pages.");
   }
 
   const db = getDb();

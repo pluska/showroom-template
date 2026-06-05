@@ -73,6 +73,8 @@ export const media = sqliteTable('media', {
   title: text('title').notNull(),
   url: text('url').notNull(),
   type: text('type'),
+  category: text('category').default('EXTRA').notNull(), // 'VIDEO_SIDEBAR', 'AMENITIES_GALLERY', 'EXTRA'
+  isActive: integer('is_active', { mode: 'boolean' }).default(false).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }),
 });
