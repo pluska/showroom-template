@@ -16,7 +16,7 @@ export default async function UsersPage() {
       id: "mock-id",
       name: "andresadmin",
       email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
+      role: "ADMIN",
     }
   };
 

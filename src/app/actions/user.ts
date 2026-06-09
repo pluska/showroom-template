@@ -7,7 +7,7 @@ const auth = async () => ({
     id: "mock-id",
     name: "andresadmin",
     email: "andresadmin@example.com",
-    role: "SUPER_ADMIN",
+    role: "ADMIN",
   }
 });
 import bcrypt from "bcryptjs";

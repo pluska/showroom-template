@@ -50,9 +50,9 @@ export default function Sidebar({ role }: SidebarProps) {
 
   return (
     <div className="w-64 bg-base-100 shadow-md flex flex-col h-full">
-      <div className="p-4 border-b">
-        <h2 className="text-xl font-bold text-primary">Admin Panel</h2>
-        <p className="text-xs text-gray-500 capitalize">Rol: {role.replace('_', ' ').toLowerCase()}</p>
+      <div className="px-6 h-[72px] border-b flex flex-col justify-center">
+        <h2 className="text-xl font-bold text-primary leading-tight">Admin Panel</h2>
+        <p className="text-xs text-gray-500 capitalize leading-none mt-1">Rol: {role.replace('_', ' ').toLowerCase()}</p>
       </div>
       <div className="flex-1 overflow-y-auto py-4">
         <ul className="menu bg-base-100 w-full">

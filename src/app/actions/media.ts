@@ -116,6 +116,7 @@ export async function uploadMedia(formData: FormData) {
     .returning();
 
   revalidatePath("/dashboard/media");
+  revalidatePath("/dashboard/video-amenities");
   revalidatePath("/video");
   revalidatePath("/galeria");
   return newMedia;
@@ -144,6 +145,7 @@ export async function toggleMediaActive(id: string, active: boolean, category: s
     .returning();
 
   revalidatePath("/dashboard/media");
+  revalidatePath("/dashboard/video-amenities");
   revalidatePath("/video");
   revalidatePath("/galeria");
   return updated;
@@ -165,6 +167,7 @@ export async function deleteMedia(id: string) {
     .where(eq(media.id, id));
 
   revalidatePath("/dashboard/media");
+  revalidatePath("/dashboard/video-amenities");
   revalidatePath("/video");
   revalidatePath("/galeria");
   return { success: true };

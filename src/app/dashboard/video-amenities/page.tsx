@@ -1,25 +1,23 @@
-"use client";
+import { getMedia } from "@/app/actions/media";
+import VideoAmenitiesDashboard from "@/components/dashboard/video-amenities/VideoAmenitiesDashboard";
 
-import { use } from "react";
-import { Video } from "lucide-react";
+export default async function VideoAmenitiesPage() {
+  const mediaList = await getMedia();
 
-export default function VideoPage() {
-  return (
-    <div className="flex flex-col gap-6 max-w-4xl animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold font-primary text-brand-orange">Video y Amenidades</h1>
-        <p className="text-gray-500 text-sm font-secondary">Gestiona el video promocional y las vistas de amenidades.</p>
-      </div>
-
-      <div className="bg-base-100 rounded-lg shadow-sm border border-base-200 p-8 flex flex-col items-center justify-center min-h-[350px] text-center">
-        <div className="p-4 rounded-full bg-base-200 text-brand-orange mb-4">
-          <Video className="w-12 h-12" />
-        </div>
-        <h3 className="text-lg font-bold font-primary">Módulo en Desarrollo</h3>
-        <p className="text-gray-500 text-sm max-w-md mt-2">
-          Este módulo está siendo preparado para su próxima implementación. Pronto podrás gestionar aquí toda la información relacionada con video y amenidades.
-        </p>
-      </div>
-    </div>
+  // Filter only categories related to video and amenities
+  const filteredList = mediaList.filter(
+    (m) => m.category === "VIDEO_SIDEBAR" || m.category === "AMENITIES_GALLERY"
   );
+
+  const serializedMedia = filteredList.map((m) => ({
+    id: m.id,
+    title: m.title,
+    url: m.url,
+    type: m.type,
+    category: m.category,
+    isActive: m.isActive ?? false,
+    createdAt: m.createdAt,
+  }));
+
+  return <VideoAmenitiesDashboard initialMedia={serializedMedia} />;
 }
