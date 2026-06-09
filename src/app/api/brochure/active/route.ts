@@ -3,9 +3,12 @@ import { getActiveBrochure } from "@/app/actions/brochure";
 
 export const runtime = "edge";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const active = await getActiveBrochure();
+    const { searchParams } = new URL(request.url);
+    const unitId = searchParams.get('unitId') || undefined;
+
+    const active = await getActiveBrochure(unitId);
     if (active) {
       return NextResponse.json({ url: active.url });
     }

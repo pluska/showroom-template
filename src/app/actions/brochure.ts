@@ -3,7 +3,7 @@
 import { getRequestContext } from "@cloudflare/next-on-pages";
 import { getDb } from "@/lib/db";
 import { brochures } from "@/lib/db/schema";
-import { eq, isNull, desc } from "drizzle-orm";
+import { eq, isNull, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth as nextAuth } from "@/auth";
 
@@ -36,17 +36,38 @@ export async function getBrochures() {
   return allBrochures;
 }
 
-export async function getActiveBrochure() {
+export async function getActiveBrochure(unitId?: string) {
   const db = getDb();
 
-  const [activeBrochure] = await db
+  if (unitId) {
+    const [unitBrochure] = await db
+      .select()
+      .from(brochures)
+      .where(and(
+        eq(brochures.type, 'UNIT'),
+        eq(brochures.unitId, unitId),
+        eq(brochures.isActive, true),
+        isNull(brochures.deletedAt)
+      ))
+      .limit(1);
+
+    if (unitBrochure) {
+      return unitBrochure;
+    }
+  }
+
+  const [generalBrochure] = await db
     .select()
     .from(brochures)
-    .where(eq(brochures.isActive, true))
+    .where(and(
+      eq(brochures.type, 'GENERAL'),
+      eq(brochures.isActive, true),
+      isNull(brochures.deletedAt)
+    ))
     .limit(1);
 
-  if (activeBrochure && !activeBrochure.deletedAt) {
-    return activeBrochure;
+  if (generalBrochure) {
+    return generalBrochure;
   }
   return null;
 }
@@ -59,7 +80,11 @@ export async function uploadBrochure(formData: FormData) {
 
   const file = formData.get("file") as File;
   const title = formData.get("title") as string || "Brochure";
+  const type = (formData.get("type") as string) || "GENERAL";
+  const unitId = formData.get("unitId") as string | null;
+
   if (!file) throw new Error("No file provided");
+  if (type === "UNIT" && !unitId) throw new Error("Debes proporcionar un ID de unidad para un brochure por unidad.");
 
   if (!file.name.toLowerCase().endsWith(".pdf")) {
     throw new Error("Formato no válido. Solo se permiten archivos PDF.");
@@ -98,16 +123,34 @@ export async function uploadBrochure(formData: FormData) {
 
   const db = getDb();
 
-  // Check if there are any existing brochures
+  // Check if there are any existing brochures for this type
   const existingBrochures = await getBrochures();
-  const isFirst = existingBrochures.length === 0;
+  let isFirst = false;
+
+  if (type === 'GENERAL') {
+    isFirst = existingBrochures.filter(b => b.type === 'GENERAL').length === 0;
+  } else if (type === 'UNIT' && unitId) {
+    // Si es por unidad, revisamos si ya hay uno para esa unidad (incluso eliminado).
+    const conflicting = await db.select().from(brochures).where(
+      and(
+        eq(brochures.type, 'UNIT'),
+        eq(brochures.unitId, unitId)
+      )
+    );
+    for (const b of conflicting) {
+      await db.update(brochures).set({ deletedAt: new Date(), isActive: false, unitId: null }).where(eq(brochures.id, b.id));
+    }
+    isFirst = true; // El nuevo brochure por unidad siempre será activo por defecto
+  }
 
   const [newBrochure] = await db
     .insert(brochures)
     .values({
       title: title,
       url: url,
-      isActive: isFirst, // Make active if it's the first one
+      type: type,
+      unitId: type === 'UNIT' ? unitId : null,
+      isActive: isFirst,
     })
     .returning();
 
@@ -124,10 +167,21 @@ export async function setActiveBrochure(id: string) {
 
   const db = getDb();
 
-  // 1. Set all to inactive
-  await db
-    .update(brochures)
-    .set({ isActive: false });
+  const [targetBrochure] = await db.select().from(brochures).where(eq(brochures.id, id)).limit(1);
+  if (!targetBrochure) throw new Error("Brochure no encontrado");
+
+  // 1. Set all of same type (and unitId if UNIT) to inactive
+  if (targetBrochure.type === 'GENERAL') {
+    await db
+      .update(brochures)
+      .set({ isActive: false })
+      .where(eq(brochures.type, 'GENERAL'));
+  } else if (targetBrochure.type === 'UNIT') {
+    await db
+      .update(brochures)
+      .set({ isActive: false })
+      .where(and(eq(brochures.type, 'UNIT'), eq(brochures.unitId, targetBrochure.unitId!)));
+  }
 
   // 2. Set the target to active
   const [updated] = await db
@@ -150,10 +204,101 @@ export async function deleteBrochure(id: string) {
   const db = getDb();
   await db
     .update(brochures)
-    .set({ deletedAt: new Date(), isActive: false })
+    .set({ deletedAt: new Date(), isActive: false, unitId: null })
     .where(eq(brochures.id, id));
 
   revalidatePath("/dashboard/brochure");
   revalidatePath("/brochure");
   return { success: true };
+}
+
+export async function updateBrochure(id: string, formData: FormData) {
+  const session = await auth();
+  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
+    throw new Error("Unauthorized: Solo administradores pueden actualizar brochures.");
+  }
+
+  const db = getDb();
+  const [existingBrochure] = await db.select().from(brochures).where(eq(brochures.id, id)).limit(1);
+  if (!existingBrochure) throw new Error("Brochure no encontrado.");
+
+  const title = formData.get("title") as string || existingBrochure.title;
+  const type = (formData.get("type") as string) || existingBrochure.type;
+  const unitId = formData.get("unitId") as string | null;
+
+  if (type === "UNIT" && !unitId) throw new Error("Debes proporcionar un ID de unidad para un brochure por unidad.");
+
+  const file = formData.get("file") as File | null;
+  let url = existingBrochure.url;
+
+  if (file && file.size > 0) {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      throw new Error("Formato no válido. Solo se permiten archivos PDF.");
+    }
+
+    const fileName = `${Date.now()}_${file.name.replace(/\s+/g, "_")}`;
+    let newUrl = `brochure/${fileName}`;
+
+    let uploadedToR2 = false;
+    try {
+      const env = getRequestContext().env as any;
+      if (env && env.R2) {
+        const arrayBuffer = await file.arrayBuffer();
+        await env.R2.put(newUrl, arrayBuffer, {
+          httpMetadata: { contentType: file.type }
+        });
+        uploadedToR2 = true;
+
+        const isDev = process.env.NODE_ENV === 'development';
+        const r2PublicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+        
+        if (isDev) {
+          newUrl = `/api/r2/${newUrl}`;
+        } else {
+          newUrl = `${r2PublicUrl}/${newUrl}`;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    if (!uploadedToR2) {
+      throw new Error("No se pudo subir a R2.");
+    }
+    url = newUrl;
+  }
+
+  // Handle unique constraints
+  if (type === 'UNIT' && unitId) {
+    // Si la unidad ya tiene un brochure (activo o eliminado), lo desactivamos y liberamos el unitId
+    // para evitar fallos del unique constraint.
+    const conflicting = await db.select().from(brochures).where(
+      and(
+        eq(brochures.type, 'UNIT'),
+        eq(brochures.unitId, unitId)
+      )
+    );
+    for (const b of conflicting) {
+      if (b.id !== id) {
+        await db.update(brochures)
+          .set({ deletedAt: new Date(), isActive: false, unitId: null })
+          .where(eq(brochures.id, b.id));
+      }
+    }
+  }
+
+  const [updatedBrochure] = await db
+    .update(brochures)
+    .set({
+      title,
+      url,
+      type,
+      unitId: type === 'UNIT' ? unitId : null,
+    })
+    .where(eq(brochures.id, id))
+    .returning();
+
+  revalidatePath("/dashboard/brochure");
+  revalidatePath("/brochure");
+  return updatedBrochure;
 }

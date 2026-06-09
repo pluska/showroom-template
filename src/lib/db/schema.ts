@@ -83,6 +83,8 @@ export const brochures = sqliteTable('brochures', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   title: text('title').notNull(),
   url: text('url').notNull(),
+  type: text('type').default('GENERAL').notNull(), // 'GENERAL' | 'UNIT'
+  unitId: text('unit_id').unique(),
   isActive: integer('is_active', { mode: 'boolean' }).default(false).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }),

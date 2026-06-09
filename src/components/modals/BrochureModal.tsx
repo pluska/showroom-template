@@ -3,7 +3,7 @@ import { X, Download, FileText, Loader2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getAssetUrl } from '../../utils/assets';
 
-const BrochureModal = () => {
+const BrochureModal = ({ unitId }: { unitId?: string }) => {
     const isOpen = useStore(state => state.isBrochureOpen);
     const close = useStore(state => state.toggleBrochure);
     
@@ -13,7 +13,8 @@ const BrochureModal = () => {
     useEffect(() => {
         if (isOpen && !brochureUrl) {
             setIsLoading(true);
-            fetch('/api/brochure/active')
+            const fetchUrl = unitId ? `/api/brochure/active?unitId=${unitId}` : '/api/brochure/active';
+            fetch(fetchUrl)
                 .then(res => res.json() as Promise<{ url?: string }>)
                 .then(data => {
                     if (data && data.url) {
@@ -28,7 +29,7 @@ const BrochureModal = () => {
                 })
                 .finally(() => setIsLoading(false));
         }
-    }, [isOpen, brochureUrl, close]);
+    }, [isOpen, brochureUrl, close, unitId]);
 
     if (!isOpen) return null;
 

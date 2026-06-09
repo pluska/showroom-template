@@ -41,7 +41,7 @@ const UnitPage = () => {
   const [hasBrochure, setHasBrochure] = useState<boolean>(false);
 
   useEffect(() => {
-    fetch('/api/brochure/active')
+    fetch(`/api/brochure/active?unitId=${unitId}`)
       .then(res => res.json() as Promise<{ url?: string }>)
       .then(data => {
         if (data && data.url) {
@@ -316,7 +316,7 @@ const UnitPage = () => {
         unitId={unit.id} 
         floorId={floor.id} 
       />
-      <BrochureModal />
+      <BrochureModal unitId={unitId} />
 
       {/* GLOBAL SIDEBAR TOGGLE */}
       {/* GLOBAL CONTROLS (Left) */}
