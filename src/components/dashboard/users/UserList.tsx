@@ -120,7 +120,7 @@ export default function UserList({ users, isSuperAdmin }: UserListProps) {
 
               <div className="form-control w-full">
                 <label className="label py-1">
-                  <span className="label-text text-xs font-bold text-gray-400 uppercase">Traspasar citas futuras a:</span>
+                  <span className="label-text text-xs font-bold text-gray-600 uppercase">Traspasar citas futuras a:</span>
                 </label>
                 <select
                   value={transferToId}

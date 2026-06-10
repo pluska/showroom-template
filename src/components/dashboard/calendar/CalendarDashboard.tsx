@@ -627,7 +627,7 @@ export default function CalendarDashboard({
             {/* Seller dropdown filter for Admin */}
             {isUserAdmin && (
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-400 uppercase">Ver agenda de:</span>
+                <span className="text-xs font-bold text-gray-600 uppercase">Ver agenda de:</span>
                 <select
                   value={selectedSellerFilter}
                   onChange={(e) => setSelectedSellerFilter(e.target.value)}

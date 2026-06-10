@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useTransition, useMemo } from "react";
+import React, { useState, useTransition, useMemo, useEffect } from "react";
+import { getAssetUrl } from "@/utils/assets";
 import {
   Building,
   LayoutGrid,
@@ -21,6 +22,8 @@ import {
   FileSpreadsheet,
   Check,
   Compass,
+  Mail,
+  Copy,
 } from "lucide-react";
 import {
   createFloor,
@@ -142,8 +145,57 @@ export default function UnitsDashboard({
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<
-    "furnished" | "unfurnished" | "plans" | "balcony" | "tour"
+    "furnished" | "unfurnished" | "plans" | "balcony" | "brochure"
   >("furnished");
+  const [unitBrochureUrl, setUnitBrochureUrl] = useState<string | null>(null);
+  const [loadingBrochure, setLoadingBrochure] = useState(false);
+
+  useEffect(() => {
+    if (selectedUnit && activeDetailTab === "brochure") {
+      setLoadingBrochure(true);
+      fetch(`/api/brochure/active?unitId=${selectedUnit.id}`)
+        .then((res) => res.json())
+        .then((data: any) => {
+          if (data && data.url) {
+            setUnitBrochureUrl(data.url);
+          } else {
+            setUnitBrochureUrl(null);
+          }
+        })
+        .catch((err) => {
+          console.error("Error loading brochure:", err);
+          setUnitBrochureUrl(null);
+        })
+        .finally(() => {
+          setLoadingBrochure(false);
+        });
+    }
+  }, [selectedUnit, activeDetailTab]);
+
+  const getAbsoluteBrochureUrl = (url: string | null) => {
+    if (!url) return "";
+    const resolved = getAssetUrl(url);
+    if (resolved.startsWith("http")) return resolved;
+    if (typeof window !== "undefined") {
+      return `${window.location.origin}${resolved.startsWith("/") ? "" : "/"}${resolved}`;
+    }
+    return resolved;
+  };
+
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = () => {
+    const absoluteUrl = getAbsoluteBrochureUrl(unitBrochureUrl);
+    if (!absoluteUrl) return;
+    navigator.clipboard.writeText(absoluteUrl)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch((err) => {
+        console.error("Failed to copy link:", err);
+      });
+  };
 
   // ----------------------------------------------------
   // HANDLERS - FLOOR
@@ -1357,10 +1409,10 @@ export default function UnitsDashboard({
                 Vista Balcón
               </button>
               <button
-                onClick={() => setActiveDetailTab("tour")}
-                className={`tab ${activeDetailTab === "tour" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                onClick={() => setActiveDetailTab("brochure")}
+                className={`tab ${activeDetailTab === "brochure" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
               >
-                Recorrido 3D
+                Brochure
               </button>
             </div>
 
@@ -1434,31 +1486,80 @@ export default function UnitsDashboard({
                 </div>
               )}
 
-              {/* Tab: Tour */}
-              {activeDetailTab === "tour" && (
+              {/* Tab: Brochure */}
+              {activeDetailTab === "brochure" && (
                 <div className="w-full flex flex-col justify-center items-center py-6 text-center">
-                  {!selectedUnit.tourUrl ? (
-                    <div className="text-gray-400 dark:text-gray-500">Enlace de recorrido virtual 3D no configurado.</div>
+                  {loadingBrochure ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <span className="loading loading-spinner text-primary loading-md"></span>
+                      <p className="text-sm text-gray-500 mt-2">Cargando brochure...</p>
+                    </div>
+                  ) : !unitBrochureUrl ? (
+                    <div className="text-gray-400 dark:text-gray-500">Brochure digital no configurado para esta unidad.</div>
                   ) : (
-                    <div className="w-full max-w-2xl flex flex-col gap-4">
-                      <div className="relative aspect-video w-full rounded-xl overflow-hidden shadow-md border-2 border-base-300 dark:border-base-200 bg-black">
-                        {/* Iframe preview if desired, or simple preview banner */}
+                    <div className="w-full max-w-3xl flex flex-col gap-4">
+                      <div className="relative w-full h-[500px] rounded-xl overflow-hidden shadow-md border-2 border-base-300 dark:border-base-200 bg-white">
                         <iframe
-                          src={selectedUnit.tourUrl}
+                          src={getAssetUrl(unitBrochureUrl)}
                           className="w-full h-full border-none"
-                          allowFullScreen
-                          title="Recorrido 3D"
+                          title="Vista Previa de Brochure"
                         />
                       </div>
-                      <div>
+                      <div className="flex flex-wrap justify-center gap-3">
                         <a
-                          href={selectedUnit.tourUrl}
+                          href={getAssetUrl(unitBrochureUrl)}
                           target="_blank"
                           rel="noreferrer"
-                          className="btn btn-warning bg-brand-orange hover:bg-brand-dark-orange text-white"
+                          className="btn btn-warning bg-brand-orange hover:bg-brand-dark-orange text-white flex items-center gap-2"
                         >
-                          Abrir Recorrido Virtual en Pestaña Nueva
-                          <ExternalLink className="w-4 h-4 ml-1" />
+                          <ExternalLink className="w-4 h-4" />
+                          Abrir Brochure
+                        </a>
+
+                        {/* Copy Link */}
+                        <button
+                          onClick={handleCopyLink}
+                          className="btn btn-outline btn-neutral flex items-center gap-2"
+                        >
+                          {copied ? (
+                            <>
+                              <Check className="w-4 h-4 text-success animate-scale-in" />
+                              Copiado
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              Copiar Enlace
+                            </>
+                          )}
+                        </button>
+
+                        {/* WhatsApp sharing */}
+                        <a
+                          href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                            `Hola, te comparto el brochure de la unidad ${selectedUnit.identifier} del Showroom Santa Fe: ${getAbsoluteBrochureUrl(unitBrochureUrl)}`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-success text-white flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 border-0"
+                        >
+                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.966C16.59 1.978 14.12 .953 11.487.953c-5.412 0-9.817 4.358-9.82 9.782-.002 1.742.485 3.442 1.413 4.988l-.947 3.454 3.528-.916c1.558.85 3.111 1.295 4.392 1.295zM17.5 14.39c-.3-.149-1.785-.88-2.062-.98-.277-.101-.479-.149-.68.151-.2.299-.777.98-.952 1.18-.175.2-.35.226-.65.076-.3-.15-1.267-.467-2.414-1.491-.892-.796-1.494-1.78-1.67-2.079-.175-.3-.019-.462.13-.61.135-.133.3-.35.45-.526.15-.175.2-.299.3-.5.1-.2.05-.375-.025-.526-.075-.15-.68-1.637-.932-2.247-.247-.591-.497-.511-.68-.521-.176-.01-.377-.01-.577-.01-.2 0-.527.075-.803.375-.276.3-.1.526-.1.803 0 .278.101.526.2.777.302.277 3.51 5.39 8.52 7.56 1.192.516 2.124.825 2.85 1.055 1.197.38 2.286.326 3.148.196.961-.146 1.785-.726 2.062-1.39.277-.665.277-1.232.193-1.39-.084-.158-.299-.247-.599-.397z"/>
+                          </svg>
+                          WhatsApp
+                        </a>
+
+                        {/* Email sharing */}
+                        <a
+                          href={`mailto:?subject=${encodeURIComponent(
+                            `Brochure de la unidad ${selectedUnit.identifier} - Showroom Santa Fe`
+                          )}&body=${encodeURIComponent(
+                            `Hola,\n\nTe comparto el brochure de la unidad ${selectedUnit.identifier} del Showroom Santa Fe:\n\n${getAbsoluteBrochureUrl(unitBrochureUrl)}\n\nSaludos!`
+                          )}`}
+                          className="btn btn-outline btn-neutral flex items-center gap-2"
+                        >
+                          <Mail className="w-4 h-4" />
+                          Correo
                         </a>
                       </div>
                     </div>

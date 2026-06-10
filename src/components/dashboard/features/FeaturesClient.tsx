@@ -75,7 +75,7 @@ function SortableFeatureRow({
           >
             <GripVertical className="w-5 h-5" />
           </button>
-          <span className="font-semibold text-white capitalize w-24">
+          <span className="font-semibold text-gray-900 capitalize w-24">
             {feature.id}
           </span>
         </div>
@@ -86,11 +86,11 @@ function SortableFeatureRow({
           value={localLabel} 
           onChange={(e) => setLocalLabel(e.target.value)}
           onBlur={onBlurLabel}
-          className="bg-base-200 border border-base-300 text-gray-200 text-sm rounded-lg focus:ring-brand-orange focus:border-brand-orange block w-full p-2"
+          className="bg-base-100 border border-base-300 text-gray-900 text-sm rounded-lg focus:ring-brand-orange focus:border-brand-orange block w-full p-2 font-medium"
         />
       </td>
       <td className="px-6 py-4">
-        <span className="text-gray-400 font-mono text-xs bg-base-300 px-2 py-1 rounded">
+        <span className="text-gray-700 font-mono text-xs bg-base-200 px-2.5 py-1 rounded-md font-medium">
           {feature.path || feature.action || '#'}
         </span>
       </td>
@@ -249,8 +249,8 @@ export default function FeaturesClient({ initialFeatures }: { initialFeatures: S
   return (
     <div className="bg-base-100 rounded-lg shadow-sm border border-base-200 overflow-hidden w-full">
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm text-gray-500 bg-gray-800">
-          <thead className="text-xs text-gray-700 uppercase bg-base-200/50">
+        <table className="w-full text-left text-sm text-gray-600 bg-base-100">
+          <thead className="text-xs text-gray-700 uppercase bg-base-200">
             <tr>
               <th scope="col" className="px-6 py-4 font-primary">Módulo</th>
               <th scope="col" className="px-6 py-4 font-primary">Nombre (Label)</th>
