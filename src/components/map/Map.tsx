@@ -161,13 +161,11 @@ export default function MapComponent({ destination, origin, padding, onMarkerCli
             {feature.properties.imagen ? (
                 <div className="w-12 h-12 bg-white rounded-full p-2 shadow-md flex items-center justify-center hover:scale-125 transition-transform border border-brand-orange/20">
                     <img 
-                        src={`/${feature.properties.imagen}`}
+                        src={feature.properties.imagen.startsWith('http') || feature.properties.imagen.startsWith('/') ? feature.properties.imagen : `/${feature.properties.imagen}`}
                         alt={feature.properties.nombre}
                         className="w-full h-full object-contain"
                         onError={(e) => {
                             e.currentTarget.style.display = 'none';
-                            // If we wanted a fallback, we'd need state or a different structure. 
-                            // For now, if missing, it will show empty white circle.
                         }}
                     />
                 </div>

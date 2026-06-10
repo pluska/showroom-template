@@ -11,7 +11,7 @@ export const metadata = {
 
 export default async function UnitsPage() {
   const session = await auth();
-  const userRole = session?.user?.role || "ADMIN";
+  const userRole = session?.user?.role || "SUPER_ADMIN";
   const isSuperAdmin = userRole === "SUPER_ADMIN";
 
   // Fetch initial data on the server

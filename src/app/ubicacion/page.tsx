@@ -3,13 +3,41 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import MapComponent from '@/components/map/Map';
 import Sidebar from '@/components/layout/Sidebar';
 import { Search, MapPin, Menu, ChevronDown, ChevronUp, Car, Footprints, Bike, Navigation, X } from 'lucide-react';
-import { locationsData, type LocationFeature } from '@/data/locations';
+import { type LocationFeature } from '@/data/locations';
+import { getLocations, seedLocations } from '@/app/actions/locations';
 
 const DirectionsPage = () => {
+    const [locations, setLocations] = useState<any[]>([]);
     const [filter, setFilter] = useState('');
     const [selectedName, setSelectedName] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    // Load locations dynamically from database
+    useEffect(() => {
+        seedLocations().then(() => {
+            getLocations().then((dbLocs) => {
+                setLocations(dbLocs);
+            });
+        });
+    }, []);
+
+    // Map database locations to GeoJSON features
+    const locationsFeatures = useMemo<LocationFeature[]>(() => {
+        return locations.map(loc => ({
+            type: "Feature" as const,
+            properties: {
+                nombre: loc.name,
+                categoria: loc.category,
+                imagen: loc.imagePath || undefined
+            },
+            geometry: {
+                coordinates: [loc.longitude, loc.latitude] as [number, number],
+                type: "Point" as const
+            },
+            id: loc.id
+        }));
+    }, [locations]);
 
     // Initialize panel open on desktop
     const [isPanelOpen, setIsPanelOpen] = useState(() => {
@@ -27,9 +55,9 @@ const DirectionsPage = () => {
     const [transportMode, setTransportMode] = useState<'driving' | 'walking' | 'cycling'>('driving');
     const [routeStats, setRouteStats] = useState<{ driving: { duration: number }; walking: { duration: number }; cycling: { duration: number } } | null>(null);
 
-    const categories = Array.from(new Set(locationsData.features.map((f: LocationFeature) => f.properties.categoria))).filter(Boolean) as string[];
+    const categories = Array.from(new Set(locationsFeatures.map((f: LocationFeature) => f.properties.categoria))).filter(Boolean) as string[];
 
-    const filteredLocations = locationsData.features.filter((feature: LocationFeature) => {
+    const filteredLocations = locationsFeatures.filter((feature: LocationFeature) => {
         if (feature.properties.nombre === 'Santa Fe') return false;
 
         const matchesSearch = feature.properties.nombre.toLowerCase().includes(filter.toLowerCase());
@@ -322,7 +350,7 @@ const DirectionsPage = () => {
                                         <div className="w-10 h-10 rounded-full bg-white p-1.5 shadow-sm border border-gray-100 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                                             {feature.properties.imagen ? (
                                                 <img
-                                                    src={`/${feature.properties.imagen}`}
+                                                    src={feature.properties.imagen.startsWith('http') || feature.properties.imagen.startsWith('/') ? feature.properties.imagen : `/${feature.properties.imagen}`}
                                                     alt={feature.properties.nombre}
                                                     className="w-full h-full object-contain"
                                                     onError={(e) => e.currentTarget.style.display = 'none'}

@@ -21,7 +21,7 @@ export default async function DashboardLayout({
   const mockUser = {
     name: session?.user?.name || "Dev User",
     email: session?.user?.email || "dev@example.com",
-    role: (session?.user?.role as string) || "ADMIN",
+    role: (session?.user?.role as string) || "SUPER_ADMIN",
   };
 
   return (

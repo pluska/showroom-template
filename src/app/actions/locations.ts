@@ -1,0 +1,168 @@
+"use server";
+
+import { getDb } from "@/lib/db";
+import { locationsPoi } from "@/lib/db/schema";
+import { eq, isNull, and } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { auth as nextAuth } from "@/auth";
+import initialLocations from "@/data/santa_fe_locations.json";
+
+const auth = async () => {
+  try {
+    const session = await nextAuth();
+    if (session) return session;
+  } catch (e) {
+    // Ignore next-auth error in some local runtime environments
+  }
+  return {
+    user: {
+      id: "mock-id",
+      name: "andresadmin",
+      email: "andresadmin@example.com",
+      role: "SUPER_ADMIN",
+    }
+  };
+};
+
+export async function getLocations(includeInactive = false) {
+  const db = getDb();
+  
+  const query = db.select().from(locationsPoi).where(
+    includeInactive
+      ? isNull(locationsPoi.deletedAt)
+      : and(isNull(locationsPoi.deletedAt), eq(locationsPoi.isActive, true))
+  );
+  
+  const results = await query;
+  return results;
+}
+
+export async function createLocation(
+  name: string,
+  category: string,
+  imagePath: string | null,
+  longitude: number,
+  latitude: number,
+  isActive = true
+) {
+  const session = await auth();
+  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
+    throw new Error("Unauthorized: Solo administradores pueden agregar ubicaciones.");
+  }
+  
+  const db = getDb();
+  
+  const [newLocation] = await db
+    .insert(locationsPoi)
+    .values({
+      name,
+      category,
+      imagePath,
+      longitude,
+      latitude,
+      isActive,
+    })
+    .returning();
+    
+  revalidatePath("/ubicacion");
+  revalidatePath("/dashboard/map");
+  return newLocation;
+}
+
+export async function updateLocation(
+  id: string,
+  name: string,
+  category: string,
+  imagePath: string | null,
+  longitude: number,
+  latitude: number,
+  isActive: boolean
+) {
+  const session = await auth();
+  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
+    throw new Error("Unauthorized: Solo administradores pueden actualizar ubicaciones.");
+  }
+  
+  const db = getDb();
+  
+  const [updatedLocation] = await db
+    .update(locationsPoi)
+    .set({
+      name,
+      category,
+      imagePath,
+      longitude,
+      latitude,
+      isActive,
+    })
+    .where(eq(locationsPoi.id, id))
+    .returning();
+    
+  revalidatePath("/ubicacion");
+  revalidatePath("/dashboard/map");
+  return updatedLocation;
+}
+
+export async function deleteLocation(id: string) {
+  const session = await auth();
+  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
+    throw new Error("Unauthorized: Solo administradores pueden eliminar ubicaciones.");
+  }
+  
+  const db = getDb();
+  
+  await db
+    .update(locationsPoi)
+    .set({ deletedAt: new Date(), isActive: false })
+    .where(eq(locationsPoi.id, id));
+    
+  revalidatePath("/ubicacion");
+  revalidatePath("/dashboard/map");
+  return { success: true };
+}
+
+export async function seedLocations() {
+  const db = getDb();
+  
+  // Check if locations already exist
+  const existing = await db
+    .select()
+    .from(locationsPoi)
+    .where(isNull(locationsPoi.deletedAt));
+    
+  if (existing.length > 0) {
+    return existing;
+  }
+  
+  const seeded: any[] = [];
+  
+  // Filter out Santa Fe project itself if present (it has its own hardcoded marker on map)
+  const features = (initialLocations.features || []).filter(
+    (f: any) => f.properties.nombre !== "Santa Fe"
+  );
+  
+  for (const feature of features) {
+    const name = feature.properties.nombre;
+    const category = feature.properties.categoria || "Otros";
+    const imagePath = feature.properties.imagen || null;
+    const longitude = feature.geometry.coordinates[0];
+    const latitude = feature.geometry.coordinates[1];
+    
+    const [row] = await db
+      .insert(locationsPoi)
+      .values({
+        id: feature.id || crypto.randomUUID(),
+        name,
+        category,
+        imagePath,
+        longitude,
+        latitude,
+        isActive: true,
+      })
+      .returning();
+      
+    seeded.push(row);
+  }
+  
+  return seeded;
+}

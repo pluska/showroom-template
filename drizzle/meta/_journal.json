@@ -57,6 +57,13 @@
       "when": 1781028200877,
       "tag": "0007_concerned_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781101581336,
+      "tag": "0008_unusual_vector",
+      "breakpoints": true
     }
   ]
 }

@@ -1,78 +1,113 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
-import { galleries, type GalleryImage } from '@/data/galleries';
+import { type GalleryImage } from '@/data/galleries';
 import { assetManifest, getAssetUrl } from '@/utils/assets';
 import FullScreenToggle from '@/components/UI/FullScreenToggle';
-import { Menu, ChevronLeft, ChevronRight } from 'lucide-react'; 
+import { Menu, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'; 
 import { preloadImages } from '@/utils/preload';
 import { useStore } from '@/store/useStore';
-import { getActiveMedia } from '@/app/actions/media';
+import { getGalleryCollections, getGalleryImages, seedGalleryCollections } from '@/app/actions/galleries';
 
 const GalleryPage = () => {
-  const [activeTabId, setActiveTabId] = useState(galleries[0]?.id || 'general');
+  const [collections, setCollections] = useState<any[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string>('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [dynamicImages, setDynamicImages] = useState<GalleryImage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const setGlobalLoading = useStore((state) => state.setGlobalLoading);
 
-  const activeGalleryBase = useMemo(() => {
-     return galleries.find(g => g.id === activeTabId) || galleries[0];
-  }, [activeTabId]);
-
-  // 2. Load Images from Manifest or Database
+  // 1. Load Collections from Database
   useEffect(() => {
+    setGlobalLoading(true);
+    setIsLoading(true);
+    seedGalleryCollections().then(() => {
+      getGalleryCollections().then((data) => {
+        const activeCollections = data.filter(c => c.isActive);
+        setCollections(activeCollections);
+        if (activeCollections.length > 0) {
+          setActiveTabId(activeCollections[0].id);
+        } else {
+          setIsLoading(false);
+          setGlobalLoading(false);
+        }
+      });
+    });
+  }, [setGlobalLoading]);
+
+  // 2. Load Images from Database or Fallback to Asset Manifest
+  useEffect(() => {
+    if (!activeTabId) return;
+    
     setCurrentIndex(0); // Reset index on tab change
     setGlobalLoading(true);
+    setIsLoading(true);
     
-    // Si estamos en la galería de amenidades, cargamos de la base de datos
-    getActiveMedia("AMENITIES_GALLERY").then((dbMedia) => {
-         const timer = setTimeout(() => {
-             // Mapear los resultados de la base de datos a GalleryImage
-             const dbImages: GalleryImage[] = dbMedia.map(m => ({
-                 id: m.id,
-                 src: getAssetUrl(m.url),
-                 alt: m.title,
-                 title: m.title
-             }));
+    getGalleryImages(activeTabId).then((dbMedia) => {
+      const timer = setTimeout(() => {
+        const dbImages: GalleryImage[] = dbMedia.map(m => ({
+          id: m.id,
+          src: getAssetUrl(m.url),
+          alt: m.title,
+          title: m.title
+        }));
 
-             // Si hay imágenes de la DB (amenidades), las usamos.
-             // Si no hay (o si estamos en otra pestaña de la galería que usa el manifest), 
-             // podemos hacer fallback al manifest, pero como el requerimiento es gestionar
-             // la galería desde el panel, daremos prioridad a la DB.
-             if (dbImages.length > 0) {
-                 setDynamicImages(dbImages);
-             } else if (activeGalleryBase?.folderPrefix) {
-                 const prefix = activeGalleryBase.folderPrefix;
-                 const matchingAssets = assetManifest.filter(path => path.startsWith(prefix));
-                 
-                 const images: GalleryImage[] = matchingAssets.map(path => {
-                     const filename = path.split('/').pop() || path;
-                     const name = filename.split('.')[0].replace(/_/g, ' ').replace(/-/g, ' ');
-                     let title = name.charAt(0).toUpperCase() + name.slice(1);
-                     if (/^\d+$/.test(title)) title = `Amenity ${title}`;
-                     
-                     return {
-                         id: path,
-                         src: getAssetUrl(path),
-                         alt: title,
-                         title: title
-                     };
-                 });
-                 setDynamicImages(images);
-             } else {
-                 setDynamicImages([]);
-             }
-             setGlobalLoading(false);
-         }, 300); // 300ms min loading time to prevent flicker
-       });
+        if (dbImages.length > 0) {
+          setDynamicImages(dbImages);
+        } else {
+          // Fallback logic to local assets if DB has no images
+          let folderPrefix = undefined;
+          if (activeTabId === 'amenities') {
+            folderPrefix = 'amenities/';
+          } else if (activeTabId === 'general') {
+            folderPrefix = 'gallery/';
+          }
+          
+          if (folderPrefix) {
+            const matchingAssets = assetManifest.filter(path => path.startsWith(folderPrefix));
+            const images: GalleryImage[] = matchingAssets.map(path => {
+              const filename = path.split('/').pop() || path;
+              const name = filename.split('.')[0].replace(/_/g, ' ').replace(/-/g, ' ');
+              let title = name.charAt(0).toUpperCase() + name.slice(1);
+              if (/^\d+$/.test(title)) title = `Amenity ${title}`;
+              
+              return {
+                id: path,
+                src: getAssetUrl(path),
+                alt: title,
+                title: title
+              };
+            });
+            setDynamicImages(images);
+          } else {
+            // General fallback: if no folder prefix, look for any image in asset manifest starting with 'gallery/' as generic
+            const matchingAssets = assetManifest.filter(path => path.startsWith('gallery/'));
+            const images: GalleryImage[] = matchingAssets.map(path => {
+              const filename = path.split('/').pop() || path;
+              const name = filename.split('.')[0].replace(/_/g, ' ').replace(/-/g, ' ');
+              const title = name.charAt(0).toUpperCase() + name.slice(1);
+              return {
+                id: path,
+                src: getAssetUrl(path),
+                alt: title,
+                title: title
+              };
+            });
+            setDynamicImages(images);
+          }
+        }
+        setIsLoading(false);
+        setGlobalLoading(false);
+      }, 300); // 300ms min loading time to prevent flicker
 
-  }, [activeGalleryBase, setGlobalLoading]);
+      return () => clearTimeout(timer);
+    });
+  }, [activeTabId, setGlobalLoading]);
 
   const displayImages = useMemo(() => {
-      // If gallery base has hardcoded images (from mock), use them, else use dynamic, or mix
-      return [...(activeGalleryBase?.images || []), ...dynamicImages];
-  }, [activeGalleryBase, dynamicImages]);
+    return dynamicImages;
+  }, [dynamicImages]);
 
   // 3. Smart Preloading
   useEffect(() => {
@@ -106,10 +141,8 @@ const GalleryPage = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleNext, handlePrev]);
 
-  // 6. Current Image Safety
   const currentImage = displayImages[currentIndex];
 
-  // 7. Render
   return (
     <div className="flex bg-black h-full relative overflow-hidden group">
       
@@ -142,7 +175,12 @@ const GalleryPage = () => {
       
       {/* Main Image Area */}
       <div className="flex-1 relative flex items-center justify-center bg-black w-full h-full">
-         {displayImages.length > 0 && currentImage ? (
+         {isLoading ? (
+            <div className="flex flex-col items-center justify-center text-gray-400 gap-2">
+                <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
+                <span className="text-xs uppercase tracking-widest font-secondary">Cargando Galería...</span>
+            </div>
+         ) : displayImages.length > 0 && currentImage ? (
            <>
              {/* Prev Arrow */}
              <button 
@@ -170,6 +208,28 @@ const GalleryPage = () => {
                  <ChevronRight size={24} />
              </button>
 
+             {/* Floating Categories Bar (overlay bottom center) */}
+             {collections.length > 1 && (
+               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 p-1.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-full max-w-[90%] overflow-x-auto scrollbar-none pointer-events-auto">
+                 {collections.map((col) => (
+                   <button
+                     key={col.id}
+                     onClick={() => {
+                       setActiveTabId(col.id);
+                       setCurrentIndex(0);
+                     }}
+                     className={`px-4 py-2 text-xs font-secondary uppercase tracking-widest rounded-full transition-all duration-300 whitespace-nowrap ${
+                       activeTabId === col.id
+                         ? 'bg-brand-primary text-white font-bold shadow-md'
+                         : 'text-gray-400 hover:text-white hover:bg-white/5'
+                     }`}
+                   >
+                     {col.title}
+                   </button>
+                 ))}
+               </div>
+             )}
+
              {/* Counter/Index */}
              <div className="absolute bottom-6 right-6 z-20 pointer-events-none">
                  <div className="text-xs font-medium bg-black/30 text-white px-3 py-1 rounded-full backdrop-blur-md border border-white/10">
@@ -178,8 +238,8 @@ const GalleryPage = () => {
              </div>
            </>
          ) : (
-            <div className="text-gray-500">
-                {galleries.length === 0 ? 'No galleries configured.' : 'Loading images...'}
+            <div className="text-gray-500 font-secondary text-sm uppercase tracking-widest">
+                No hay imágenes configuradas en esta galería.
             </div>
          )}
       </div>

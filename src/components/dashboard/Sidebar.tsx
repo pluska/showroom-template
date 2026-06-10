@@ -36,6 +36,7 @@ export default function Sidebar({ role }: SidebarProps) {
     { name: "Usuarios", href: "/dashboard/users", icon: Users, visible: isAdmin },
     { name: "Unidades", href: "/dashboard/units", icon: Building, visible: true },
     { name: "Multimedia", href: "/dashboard/media", icon: ImageIcon, visible: true },
+    { name: "Galerías", href: "/dashboard/galleries", icon: ImageIcon, visible: isSuperAdmin },
     { name: "Brochure", href: "/dashboard/brochure", icon: BookOpen, visible: true },
     { name: "Avances de Obra", href: "/dashboard/progress", icon: Hammer, visible: isAdmin },
     { name: "Identidad", href: "/dashboard/identity", icon: Palette, visible: isSuperAdmin },
