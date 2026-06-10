@@ -1,6 +1,5 @@
 "use client";
 import { useRouter, useParams } from 'next/navigation';
-import { floorsData } from '../../data/floors';
 import { Maximize2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
@@ -8,6 +7,7 @@ const FloorSelector = () => {
     const router = useRouter();
     const params = useParams();
     const floorId = params.floorId as string;
+    const floorsData = useStore(state => state.floorsData);
 
     // Sort floors descending (e.g. 9 down to 1, then PB)
     const sortedFloors = [...floorsData].sort((a, b) => {

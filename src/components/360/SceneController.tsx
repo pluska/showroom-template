@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import gsap from 'gsap';
 import { buildingFaces } from '@/data/buildingData';
-import { floorsData } from '@/data/floors';
 import { preloadImages } from '@/utils/preload';
 
 interface SceneControllerProps {
@@ -12,7 +11,7 @@ interface SceneControllerProps {
 }
 
 export default function SceneController({ isHighlighted }: SceneControllerProps) {
-  const { viewState, endTransition, currentRoom, currentFace, confirmRotation, finishRotation, transitionUrl, timeOfDay, finishTimeLapse, targetDestination } = useStore();
+  const { viewState, endTransition, currentRoom, currentFace, confirmRotation, finishRotation, transitionUrl, timeOfDay, finishTimeLapse, targetDestination, floorsData } = useStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   const bgVideoRef = useRef<HTMLVideoElement>(null);
   const panoRef = useRef<HTMLDivElement>(null);

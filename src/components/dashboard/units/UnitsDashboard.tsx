@@ -764,8 +764,11 @@ export default function UnitsDashboard({
           3. KANBAN VIEW - Column state management
           ---------------------------------------------------- */}
       {activeView === "kanban" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
-          {(["AVAILABLE", "RESERVED", "SOLD", "COMMON_AREA"] as const).map((columnState) => {
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6 items-start`}>
+          {(isSuperAdmin 
+            ? (["AVAILABLE", "RESERVED", "SOLD", "COMMON_AREA"] as const)
+            : (["AVAILABLE", "RESERVED", "SOLD"] as const)
+          ).map((columnState) => {
             const columnUnits = filteredUnits.filter((u) => u.state === columnState);
 
             return (
@@ -1068,7 +1071,7 @@ export default function UnitsDashboard({
                     <option value="AVAILABLE">Disponible</option>
                     <option value="RESERVED">Apartado</option>
                     <option value="SOLD">Vendido</option>
-                    <option value="COMMON_AREA">Área Común</option>
+                    {isSuperAdmin && <option value="COMMON_AREA">Área Común</option>}
                   </select>
                 </div>
 
@@ -1476,7 +1479,7 @@ export default function UnitsDashboard({
                   <option value="AVAILABLE">Disponible</option>
                   <option value="RESERVED">Apartado</option>
                   <option value="SOLD">Vendido</option>
-                  <option value="COMMON_AREA">Área Común</option>
+                  {isSuperAdmin && <option value="COMMON_AREA">Área Común</option>}
                 </select>
               </div>
 

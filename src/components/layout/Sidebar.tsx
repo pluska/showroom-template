@@ -6,7 +6,6 @@ import { getAssetUrl } from '@/utils/assets';
 import { useStore } from '@/store/useStore';
 import { preloadImages, preloadVideo } from '@/utils/preload';
 import { buildingFaces } from '@/data/buildingData';
-import { floorsData } from '@/data/floors';
 import config from '@/config/config';
 
 import { getFeatures } from '@/app/actions/features';
@@ -42,6 +41,7 @@ const IconMap: Record<string, any> = {
 const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) => {
     const router = useRouter();
     const pathname = usePathname();
+    const floorsData = useStore(state => state.floorsData);
 
     const [activeFeatures, setActiveFeatures] = useState<any[]>(defaultFeatures);
 

@@ -10,15 +10,9 @@ export const metadata = {
 };
 
 export default async function UnitsPage() {
-  // Mock session for local development
-  const session = {
-    user: {
-      id: "mock-id",
-      name: "andresadmin",
-      email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
-    }
-  };
+  const session = await auth();
+  const userRole = session?.user?.role || "ADMIN";
+  const isSuperAdmin = userRole === "SUPER_ADMIN";
 
   // Fetch initial data on the server
   const [initialFloors, initialUnits, initialLogs] = await Promise.all([
@@ -53,17 +47,24 @@ export default async function UnitsPage() {
     photosBalcony: (u.photosBalcony as string[]) || [],
   }));
 
+  const filteredUnits = serializedUnits.filter((u) => {
+    if (u.state === "COMMON_AREA") {
+      return isSuperAdmin;
+    }
+    return true;
+  });
+
   const currentUser = {
-    id: session.user.id || "",
-    name: session.user.name || "Dev User",
-    email: session.user.email || "",
-    role: session.user.role || "SELLER",
+    id: session?.user?.id || "mock-id",
+    name: session?.user?.name || "andresadmin",
+    email: session?.user?.email || "andresadmin@example.com",
+    role: userRole,
   };
 
   return (
     <UnitsDashboard
       initialFloors={serializedFloors}
-      initialUnits={serializedUnits}
+      initialUnits={filteredUnits}
       currentUser={currentUser}
     />
   );

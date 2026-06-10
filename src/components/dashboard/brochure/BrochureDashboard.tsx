@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { uploadBrochure, setActiveBrochure, deleteBrochure, updateBrochure } from "@/app/actions/brochure";
 import { BookOpen, CheckCircle, Trash2, Upload, FileText, Loader2, AlertTriangle, Building, LayoutGrid, Edit2, X } from "lucide-react";
-import { floorsData } from "@/data/floors";
+import { type Floor } from "@/data/floors";
 
 type Brochure = {
   id: string;
@@ -17,9 +17,10 @@ type Brochure = {
 
 interface BrochureDashboardProps {
   initialBrochures: Brochure[];
+  floorsData: Floor[];
 }
 
-export default function BrochureDashboard({ initialBrochures }: BrochureDashboardProps) {
+export default function BrochureDashboard({ initialBrochures, floorsData }: BrochureDashboardProps) {
   const [brochures, setBrochures] = useState<Brochure[]>(initialBrochures);
   const [isPending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
@@ -37,6 +38,15 @@ export default function BrochureDashboard({ initialBrochures }: BrochureDashboar
 
   const selectedFloor = floorsData.find((f) => f.id === selectedFloorId);
   const editSelectedFloor = floorsData.find((f) => f.id === editFloorId);
+
+  const findUnitIdentifier = (unitId: string | null | undefined) => {
+    if (!unitId) return "";
+    for (const floor of floorsData) {
+      const unit = floor.units.find((u) => u.id === unitId);
+      if (unit) return unit.identifier || unit.id;
+    }
+    return unitId;
+  };
 
   const handleEditClick = (brochure: Brochure) => {
     setEditingBrochure(brochure);
@@ -245,7 +255,7 @@ export default function BrochureDashboard({ initialBrochures }: BrochureDashboar
                 >
                   <option value="" disabled>Selecciona una unidad</option>
                   {selectedFloor?.units.map((u) => (
-                    <option key={u.id} value={u.id}>Unidad {u.id} {u.subtitle ? `(${u.subtitle})` : ''}</option>
+                    <option key={u.id} value={u.id}>Unidad {u.identifier || u.id} {u.subtitle ? `(${u.subtitle})` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -334,7 +344,7 @@ export default function BrochureDashboard({ initialBrochures }: BrochureDashboar
                         ) : (
                           <div className="flex flex-col gap-1 items-start">
                             <span className="badge badge-info text-xs">Por Unidad</span>
-                            {brochure.unitId && <span className="text-[10px] text-gray-500 font-bold bg-base-200 px-1.5 py-0.5 rounded">Unidad {brochure.unitId}</span>}
+                            {brochure.unitId && <span className="text-[10px] text-gray-500 font-bold bg-base-200 px-1.5 py-0.5 rounded">Unidad {findUnitIdentifier(brochure.unitId)}</span>}
                           </div>
                         )}
                       </td>
@@ -449,7 +459,7 @@ export default function BrochureDashboard({ initialBrochures }: BrochureDashboar
                     >
                       <option value="" disabled>Selecciona una unidad</option>
                       {editSelectedFloor?.units.map((u) => (
-                        <option key={u.id} value={u.id}>Unidad {u.id} {u.subtitle ? `(${u.subtitle})` : ''}</option>
+                        <option key={u.id} value={u.id}>Unidad {u.identifier || u.id} {u.subtitle ? `(${u.subtitle})` : ''}</option>
                       ))}
                     </select>
                   </div>

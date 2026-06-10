@@ -10,9 +10,9 @@ export async function GET(request: Request) {
 
     const active = await getActiveBrochure(unitId);
     if (active) {
-      return NextResponse.json({ url: active.url });
+      return NextResponse.json({ url: active.url, title: active.title });
     }
-    return NextResponse.json({ url: null });
+    return NextResponse.json({ url: null, title: null });
   } catch (error) {
     console.error("Error fetching active brochure:", error);
     return NextResponse.json({ url: null }, { status: 500 });

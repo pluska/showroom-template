@@ -1,5 +1,4 @@
 import { useRouter } from 'next/navigation';
-import { floorsData } from '@/data/floors';
 import { ChevronUp, ChevronDown } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 
@@ -10,6 +9,7 @@ interface MobileFloorNavProps {
 const MobileFloorNav = ({ currentFloorId }: MobileFloorNavProps) => {
     const router = useRouter();
     const setFloor = useStore(state => state.setFloor);
+    const floorsData = useStore(state => state.floorsData);
 
     // Sort floors: 9, 8, ... 1, PB (Top to Bottom visually)
     // We want "Up" to go to a higher index in this sorted array? 

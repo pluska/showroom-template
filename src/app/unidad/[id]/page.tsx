@@ -1,8 +1,8 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Share2, X, MoreVertical, Menu, Ruler, Bed, Bath, PanelRightOpen, Rotate3d, ImageIcon, ChevronLeft, ChevronRight, Mail } from 'lucide-react';
-import { floorsData, UnitStatusString } from '@/data/floors';
+import { ArrowLeft, Share2, X, MoreVertical, Menu, Ruler, Bed, Bath, PanelRightOpen, Rotate3d, ImageIcon, ChevronLeft, ChevronRight, Mail, FileText } from 'lucide-react';
+import { UnitStatusString, type Floor, type Unit } from '@/data/floors';
 import Sidebar from '@/components/layout/Sidebar';
 import RequestInfoModal from '@/components/modals/RequestInfoModal';
 import BrochureModal from '@/components/modals/BrochureModal';
@@ -17,6 +17,7 @@ const UnitPage = () => {
   const params = useParams();
   const unitId = params.id as string;
   const router = useRouter();
+  const floorsData = useStore(state => state.floorsData);
   
   // Resolve Unit & Floor
   const floor = floorsData.find(f => f.units.some(u => u.id === unitId));
@@ -38,18 +39,20 @@ const UnitPage = () => {
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isLoadingNav, setIsLoadingNav] = useState(false);
   
-  const [hasBrochure, setHasBrochure] = useState<boolean>(false);
+  const [brochure, setBrochure] = useState<{ url: string; title: string } | null>(null);
 
   useEffect(() => {
     fetch(`/api/brochure/active?unitId=${unitId}`)
-      .then(res => res.json() as Promise<{ url?: string }>)
+      .then(res => res.json() as Promise<{ url?: string; title?: string }>)
       .then(data => {
         if (data && data.url) {
-          setHasBrochure(true);
+          setBrochure({ url: data.url, title: data.title || "Brochure" });
+        } else {
+          setBrochure(null);
         }
       })
       .catch(err => console.error("Error fetching brochure:", err));
-  }, []);
+  }, [unitId]);
   
   // --- ASSET RESOLUTION HELPERS ---
   const getTransitionUrl = (assetId: string, type: string) => {
@@ -392,7 +395,7 @@ const UnitPage = () => {
                 
                 {/* Left: Title & Subtitle */}
                 <div>
-                     <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 mb-0">{unit.id}</h1>
+                     <h1 className="text-3xl font-semibold tracking-tight text-neutral-900 mb-0">{unit.identifier || unit.id}</h1>
                      <p className="text-base text-slate-500 font-medium">{unit.subtitle || 'Unit'}</p>
                 </div>
 
@@ -451,6 +454,15 @@ const UnitPage = () => {
                  </div>
              </div>
              )}
+             {/* [MOBILE View (< XL)] - Brochure info if assigned */}
+             {brochure && (
+             <div className="block xl:hidden px-6 py-2">
+                 <div className="bg-gray-50 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+                     <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">Brochure</span>
+                     <span className="text-xs font-bold text-neutral-800 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-brand-gold"/> {brochure.title}</span>
+                 </div>
+             </div>
+             )}
 
              {/* [DESKTOP View (>= XL)] - Detailed List & Poster */}
              <div className="hidden xl:block px-6 py-8 space-y-8">
@@ -498,7 +510,22 @@ const UnitPage = () => {
                              <span className="text-sm font-medium">{unit.bathrooms} Baños</span>
                         </li>
                     </ul>
-                </div>
+                    {/* Brochure Section */}
+                 {brochure && (
+                 <div className="pt-2">
+                     <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-900 mb-4">Brochure Asignado</h3>
+                     <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                         <div className="p-2 rounded-lg bg-white shadow-sm text-brand-gold">
+                             <FileText strokeWidth={1.5} size={20} />
+                         </div>
+                         <div className="flex-1 min-w-0">
+                             <p className="text-xs text-gray-500 uppercase tracking-wider font-bold">PDF</p>
+                             <p className="text-sm font-semibold text-neutral-900 truncate">{brochure.title}</p>
+                         </div>
+                     </div>
+                 </div>
+                 )}
+             </div>
                 )}
 
              </div>
@@ -507,7 +534,7 @@ const UnitPage = () => {
         {/* Footer Actions */}
         <div className="p-6 border-t border-gray-100 bg-white w-full xl:min-w-[420px] flex flex-col gap-4">
              {/* Brochure & Disclaimer Group (Row on Mobile/Landscape, Stacked on Desktop) */}
-             {hasBrochure && (
+             {brochure && (
                  <div className="flex flex-row items-center gap-4 lg:flex-col lg:gap-6">
                      {/* Brochure Button */}
                      <button 
@@ -543,7 +570,7 @@ const UnitPage = () => {
             {/* Top Bar Controls - Hidden if Tour Mode */}
             {viewMode === 'tour' && (
                 <TourHeader 
-                    title={`Unidad ${unit.id}`}
+                    title={`Unidad ${unit.identifier || unit.id}`}
                     subtitle={`${unit.subtitle || 'Unidad'} - Piso ${floor.name}`}
                     onBack={() => handleViewChange('furnished')}
                 />

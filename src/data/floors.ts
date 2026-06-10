@@ -7,7 +7,7 @@ export const UnitStatusString: Record<UnitStatus, string> = {
 }
 
 export interface Unit {
-  id: string;        // e.g. "410"
+  id: string;        // e.g. "410" or DB uuid/string
   floorId: string;   // e.g. "4"
   price: number;     // e.g. 1000
   dimensions: number; // m2, e.g. 90
@@ -23,6 +23,7 @@ export interface Unit {
   x?: number; // Percentage 0-100
   y?: number; // Percentage 0-100
   path?: string; // SVG Path 'd' attribute for irregular shapes (0-100 coordinate space)
+  identifier?: string; // Optional friendly name (e.g. "101")
 }
 
 export interface Floor {

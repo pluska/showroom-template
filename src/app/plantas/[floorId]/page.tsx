@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { floorsData, type Unit } from '@/data/floors';
+import { type Floor, type Unit } from '@/data/floors';
 import FloorSelector from '@/components/layout/FloorSelector';
 import Sidebar from '@/components/layout/Sidebar';
 import ConsultationModal from '@/components/UI/modals/ConsultationModal';
@@ -17,6 +17,7 @@ const FloorPage = () => {
   const params = useParams();
   const floorId = params.floorId as string;
   const router = useRouter();
+  const floorsData = useStore(state => state.floorsData);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   
@@ -326,7 +327,7 @@ const FloorPage = () => {
                     {unit.subtitle !== 'Terraza' && (
                         <div className={`w-2.5 h-2.5 rounded-full ${statusColor}`} />
                     )}
-                    <span className="text-xs font-bold text-gray-800">{unit.id}</span>
+                    <span className="text-xs font-bold text-gray-800">{unit.identifier || unit.id}</span>
                 </div>
                 
                 {isSelected && (

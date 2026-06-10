@@ -12,6 +12,7 @@ const auth = async () => ({
 });
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { auth as nextAuth } from "@/auth";
 
 // Helper to audit actions
 async function logAction(
@@ -43,6 +44,83 @@ export async function getFloors() {
     .from(floors)
     .where(isNull(floors.deletedAt))
     .orderBy(floors.level);
+}
+
+export async function getFloorsData() {
+  let isSuperAdmin = false;
+  try {
+    const session = await nextAuth();
+    isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  } catch (e) {
+    // Ignore runtime/environment issues during local dev/tests
+  }
+
+  const db = getDb();
+  
+  const allFloors = await db
+    .select()
+    .from(floors)
+    .where(isNull(floors.deletedAt))
+    .orderBy(floors.level);
+
+  const allUnits = await db
+    .select()
+    .from(units)
+    .where(isNull(units.deletedAt))
+    .orderBy(units.identifier);
+
+  return allFloors.map(f => {
+    const floorUnits = allUnits
+      .filter(u => u.floorId === f.id)
+      .filter(u => {
+        if (u.state === 'COMMON_AREA') {
+          return isSuperAdmin;
+        }
+        return true;
+      })
+      .map(u => {
+        let status: 'available' | 'reserved' | 'sold' = 'available';
+        if (u.state === 'SOLD') status = 'sold';
+        else if (u.state === 'RESERVED') status = 'reserved';
+        
+        const coords = u.coordinates as { x?: number; y?: number; path?: string } | null;
+        
+        let subtitle = 'Flat';
+        if (u.type === 'STORAGE') {
+          subtitle = 'Bodega';
+        } else if (u.identifier === 'Terraza') {
+          subtitle = 'Terraza';
+        } else if (u.identifier === '801') {
+          subtitle = 'Duplex';
+        }
+
+        return {
+          id: u.id,
+          identifier: u.identifier,
+          floorId: u.floorId.replace('floor_', ''),
+          price: 0,
+          dimensions: u.areaSqm || 0,
+          bedrooms: u.bedrooms || undefined,
+          bathrooms: u.bathrooms || undefined,
+          status,
+          type: u.type === 'STORAGE' ? ('storage' as const) : ('apartment' as const),
+          subtitle,
+          description: '',
+          images: u.gallery ? (u.gallery as string[]) : [],
+          tourUrl: u.tourUrl || undefined,
+          x: coords?.x,
+          y: coords?.y,
+          path: coords?.path,
+        };
+      });
+
+    return {
+      id: f.id.replace('floor_', ''),
+      name: f.name,
+      floorPlanImage: f.imagePath || '',
+      units: floorUnits,
+    };
+  });
 }
 
 export async function createFloor(data: {

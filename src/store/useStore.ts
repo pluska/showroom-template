@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { buildingFaces } from '../data/buildingData';
 import { preloadVideo, preloadImages } from '../utils/preload';
-import { floorsData } from '../data/floors';
+import { type Floor } from '../data/floors';
 
 interface ShowroomState {
   currentFloor: number | null;
@@ -13,6 +13,10 @@ interface ShowroomState {
   transitionUrl: string | null;
   targetDestination: string | null; // e.g. 'Lobby', 'Floors'
   timeOfDay: 'day' | 'night';
+  
+  // Floors Inventory Data
+  floorsData: Floor[];
+  setFloorsData: (floors: Floor[]) => void;
   
   // Actions
   setFloor: (floor: number | string) => Promise<void>;
@@ -55,7 +59,9 @@ export const useStore = create<ShowroomState>((set, get) => ({
   isLoadingAssets: false,
   isGlobalLoading: false,
   isBrochureOpen: false,
+  floorsData: [],
   
+  setFloorsData: (floors) => set({ floorsData: floors }),
   setLoading: (loading) => set({ isLoadingAssets: loading }),
   setGlobalLoading: (loading) => set({ isGlobalLoading: loading }),
   toggleBrochure: (isOpen) => set((state) => ({ 
@@ -68,7 +74,7 @@ export const useStore = create<ShowroomState>((set, get) => ({
 
   setFloor: async (floorId) => {
     // 1. Find the floor to get the image
-    const floor = floorsData.find(f => f.id === String(floorId));
+    const floor = get().floorsData.find(f => f.id === String(floorId));
     
     if (floor) {
         set({ isLoadingAssets: true });
@@ -82,7 +88,7 @@ export const useStore = create<ShowroomState>((set, get) => ({
   },
 
   preloadAllFloors: async () => {
-    const allFloorImages = floorsData.map(f => f.floorPlanImage);
+    const allFloorImages = get().floorsData.map(f => f.floorPlanImage);
     try {
         // Preload efficiently in background
         await preloadImages(allFloorImages);

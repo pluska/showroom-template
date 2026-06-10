@@ -37,12 +37,21 @@ export default async function ToursPage() {
     floorName: t.floorName || null,
   }));
 
-  const serializedUnits = unitsList.map((u) => ({
-    id: u.id,
-    identifier: u.identifier,
-    floorId: u.floorId,
-    tourUrl: u.tourUrl || "",
-  }));
+  const isSuperAdmin = role === "SUPER_ADMIN";
+
+  const serializedUnits = unitsList
+    .filter((u) => {
+      if (u.state === "COMMON_AREA") {
+        return isSuperAdmin;
+      }
+      return true;
+    })
+    .map((u) => ({
+      id: u.id,
+      identifier: u.identifier,
+      floorId: u.floorId,
+      tourUrl: u.tourUrl || "",
+    }));
 
   const serializedMedia = mediaList.map((m) => ({
     id: m.id,
