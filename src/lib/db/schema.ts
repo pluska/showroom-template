@@ -21,6 +21,9 @@ export const appointments = sqliteTable('appointments', {
   prospectName: text('prospect_name').notNull(),
   prospectEmail: text('prospect_email'),
   prospectPhone: text('prospect_phone'),
+  prospectAddress: text('prospect_address'),
+  prospectId: text('prospect_id').references(() => prospects.id),
+  sendEmail: integer('send_email', { mode: 'boolean' }).default(true).notNull(),
   status: text('status').default('SCHEDULED').notNull(), // 'SCHEDULED', 'COMPLETED', 'CANCELLED'
   notes: text('notes'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
@@ -147,6 +150,45 @@ export const locationsPoi = sqliteTable('locations_poi', {
   isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+});
+
+export const prospects = sqliteTable('prospects', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  phone: text('phone'),
+  address: text('address'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+});
+
+export const prospectUnits = sqliteTable('prospect_units', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  prospectId: text('prospect_id').references(() => prospects.id).notNull(),
+  unitId: text('unit_id').references(() => units.id).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const availabilities = sqliteTable('availabilities', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text('user_id').references(() => users.id).notNull(),
+  dayOfWeek: integer('day_of_week').notNull(), // 0 = Sunday, 1 = Monday, etc.
+  startTime: text('start_time').notNull(), // e.g. "09:00"
+  endTime: text('end_time').notNull(), // e.g. "17:00"
+  slotDuration: integer('slot_duration').default(30).notNull(), // slot duration in minutes
+  meetingType: text('meeting_type').default('BOTH').notNull(), // 'VIRTUAL', 'IN_PERSON', 'BOTH'
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const calendarTransfers = sqliteTable('calendar_transfers', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  fromSellerId: text('from_seller_id').references(() => users.id).notNull(),
+  toSellerId: text('to_seller_id').references(() => users.id).notNull(),
+  startDate: integer('start_date', { mode: 'timestamp' }).notNull(),
+  endDate: integer('end_date', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
 

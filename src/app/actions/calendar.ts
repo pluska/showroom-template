@@ -1,0 +1,644 @@
+"use server";
+
+import { getDb } from "@/lib/db";
+import {
+  users,
+  appointments,
+  prospects,
+  prospectUnits,
+  availabilities,
+  calendarTransfers,
+  units,
+} from "@/lib/db/schema";
+import { eq, and, isNull, or, gte, lte, ne, inArray } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { auth as nextAuth } from "@/auth";
+import { Resend } from "resend";
+import AppointmentEmail from "@/components/emails/AppointmentEmail";
+import config from "@/config/config";
+
+// Helper to get logged-in user or mock for local development
+async function getSessionUser(db: any) {
+  let user = {
+    id: "mock-id",
+    name: "andresadmin",
+    email: "andresadmin@example.com",
+    role: "SUPER_ADMIN",
+  };
+
+  try {
+    const session = await nextAuth();
+    if (session?.user) {
+      user = {
+        id: session.user.id || "mock-id",
+        name: session.user.name || "Dev User",
+        email: session.user.email || "dev@example.com",
+        role: session.user.role || "SUPER_ADMIN",
+      };
+    }
+  } catch (error) {
+    // Ignore runtime issues in local tests
+  }
+
+  // Ensure user exists in D1 database to prevent foreign key errors
+  try {
+    const existingById = await db.select().from(users).where(eq(users.id, user.id));
+    if (existingById.length > 0) {
+      // User with this ID exists, we are good!
+    } else {
+      // Check if email already exists under a different ID
+      const existingByEmail = await db.select().from(users).where(eq(users.email, user.email));
+      if (existingByEmail.length > 0) {
+        // Use the existing ID in the session object so all foreign keys match
+        user.id = existingByEmail[0].id;
+      } else {
+        // No user with this ID or email exists. Safe to insert!
+        await db.insert(users).values({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          password: "mockpassword",
+          role: user.role,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Error ensuring session user exists in SQLite:", err);
+  }
+
+  return user;
+}
+
+// Utility to resolve mock-id or ALL to their true DB identifiers
+async function resolveUserId(db: any, id: string | undefined): Promise<string> {
+  if (!id) return "";
+  if (id === "mock-id" || id === "ALL") {
+    if (id === "ALL") return "ALL";
+    const existing = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, "andresadmin@example.com"));
+    if (existing.length > 0) {
+      return existing[0].id;
+    }
+  }
+  return id;
+}
+
+// Check if a transfer is active for a seller on a given date
+async function getEffectiveSellerId(db: any, sellerId: string, date: Date): Promise<string> {
+  const activeTransfers = await db
+    .select()
+    .from(calendarTransfers)
+    .where(
+      and(
+        eq(calendarTransfers.fromSellerId, sellerId),
+        lte(calendarTransfers.startDate, date),
+        gte(calendarTransfers.endDate, date)
+      )
+    );
+
+  if (activeTransfers.length > 0) {
+    // Recursively check if the target seller also has a transfer
+    return getEffectiveSellerId(db, activeTransfers[0].toSellerId, date);
+  }
+  return sellerId;
+}
+
+// ----------------------------------------------------
+// PROSPECT ACTIONS
+// ----------------------------------------------------
+
+export async function getProspects() {
+  const db = getDb();
+  return await db
+    .select()
+    .from(prospects)
+    .where(isNull(prospects.deletedAt))
+    .orderBy(prospects.name);
+}
+
+// ----------------------------------------------------
+// SELLER ACTIONS
+// ----------------------------------------------------
+
+export async function getSellers() {
+  const db = getDb();
+  await getSessionUser(db);
+  // Get all users who are sellers or admins (excluding soft-deleted)
+  return await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+    })
+    .from(users)
+    .where(isNull(users.deletedAt))
+    .orderBy(users.name);
+}
+
+// ----------------------------------------------------
+// APPOINTMENT ACTIONS
+// ----------------------------------------------------
+
+export async function getAppointments(sellerId?: string) {
+  const db = getDb();
+  const currentUser = await getSessionUser(db);
+  const resolvedSellerId = sellerId ? await resolveUserId(db, sellerId) : undefined;
+
+  // 1. Fetch all active appointments with their prospects
+  const rows = await db
+    .select({
+      appointment: appointments,
+      prospect: prospects,
+    })
+    .from(appointments)
+    .leftJoin(prospects, eq(appointments.prospectId, prospects.id))
+    .where(isNull(appointments.deletedAt));
+
+  // 2. Fetch all prospect units to map units of interest
+  const prUnits = await db
+    .select({
+      prospectId: prospectUnits.prospectId,
+      unitIdentifier: units.identifier,
+    })
+    .from(prospectUnits)
+    .innerJoin(units, eq(prospectUnits.unitId, units.id));
+
+  // Map units of interest by prospect ID
+  const unitsMap = new Map<string, string[]>();
+  prUnits.forEach((u) => {
+    const list = unitsMap.get(u.prospectId) || [];
+    list.push(u.unitIdentifier);
+    unitsMap.set(u.prospectId, list);
+  });
+
+  // 3. Fetch all active transfers
+  const transfers = await db.select().from(calendarTransfers);
+
+  // Helper to check if a date is within a transfer range
+  const isTransferActive = (fromId: string, date: Date) => {
+    const time = date.getTime();
+    return transfers.find(
+      (t) =>
+        t.fromSellerId === fromId &&
+        new Date(t.startDate).getTime() <= time &&
+        new Date(t.endDate).getTime() >= time
+    );
+  };
+
+  // Helper to resolve the final seller responsible for an appointment
+  const resolveEffectiveSeller = (origSellerId: string, date: Date): string => {
+    let currentId = origSellerId;
+    let visited = new Set<string>();
+
+    while (true) {
+      if (visited.has(currentId)) break; // Prevent cycle
+      visited.add(currentId);
+
+      const activeT = isTransferActive(currentId, date);
+      if (activeT) {
+        currentId = activeT.toSellerId;
+      } else {
+        break;
+      }
+    }
+    return currentId;
+  };
+
+  const isUserAdmin = currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
+
+  // Map and filter results
+  const mapped = rows.map(({ appointment, prospect }) => {
+    const pUnits = prospect ? (unitsMap.get(prospect.id) || []) : [];
+    const effectiveSellerId = resolveEffectiveSeller(appointment.sellerId, appointment.date);
+    
+    return {
+      ...appointment,
+      prospect: prospect ? { ...prospect, units: pUnits } : null,
+      effectiveSellerId,
+      isTransferred: effectiveSellerId !== appointment.sellerId,
+    };
+  });
+
+  if (isUserAdmin) {
+    if (resolvedSellerId && resolvedSellerId !== "ALL") {
+      // Filter by the selected original or effective seller
+      return mapped.filter(
+        (a) => a.sellerId === resolvedSellerId || a.effectiveSellerId === resolvedSellerId
+      );
+    }
+    return mapped;
+  } else {
+    // Sellers only see appointments where they are the effective seller,
+    // or their own appointments that haven't been transferred out.
+    return mapped.filter((a) => a.effectiveSellerId === currentUser.id || a.sellerId === currentUser.id);
+  }
+}
+
+export async function createAppointment(data: {
+  sellerId?: string;
+  date: Date | string;
+  type: "VIRTUAL" | "IN_PERSON";
+  prospectName: string;
+  prospectEmail: string;
+  prospectPhone?: string;
+  prospectAddress?: string;
+  unitsOfInterest?: string[]; // array of unit IDs
+  notes?: string;
+  sendEmail: boolean;
+}) {
+  const db = getDb();
+  const bookingDate = new Date(data.date);
+
+  // 1. Manage Prospect
+  let prospectId = "";
+  const existingProspects = await db
+    .select()
+    .from(prospects)
+    .where(eq(prospects.email, data.prospectEmail.trim().toLowerCase()));
+
+  if (existingProspects.length > 0) {
+    prospectId = existingProspects[0].id;
+    // Update prospect details if changed
+    await db
+      .update(prospects)
+      .set({
+        name: data.prospectName,
+        phone: data.prospectPhone || existingProspects[0].phone,
+        address: data.prospectAddress || existingProspects[0].address,
+        updatedAt: new Date(),
+      })
+      .where(eq(prospects.id, prospectId));
+  } else {
+    // Create new prospect
+    const [newProspect] = await db
+      .insert(prospects)
+      .values({
+        name: data.prospectName,
+        email: data.prospectEmail.trim().toLowerCase(),
+        phone: data.prospectPhone || null,
+        address: data.prospectAddress || null,
+      })
+      .returning();
+    prospectId = newProspect.id;
+  }
+
+  // 2. Link Units of Interest
+  if (data.unitsOfInterest && data.unitsOfInterest.length > 0) {
+    // Delete existing links for this prospect
+    await db.delete(prospectUnits).where(eq(prospectUnits.prospectId, prospectId));
+    // Insert new links
+    for (const uId of data.unitsOfInterest) {
+      await db.insert(prospectUnits).values({
+        prospectId,
+        unitId: uId,
+      });
+    }
+  }
+
+  // 3. Resolve Assigned Seller
+  let finalSellerId = data.sellerId ? await resolveUserId(db, data.sellerId) : undefined;
+
+  if (!finalSellerId) {
+    // PUBLIC BOOKING: Find available seller
+    const dayOfWeek = bookingDate.getDay();
+    const timeStr = bookingDate.toLocaleTimeString("es-ES", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }); // e.g. "10:30"
+
+    // Get all sellers' weekly availabilities for this day of week
+    const allAvails = await db
+      .select({
+        userId: availabilities.userId,
+        startTime: availabilities.startTime,
+        endTime: availabilities.endTime,
+        slotDuration: availabilities.slotDuration,
+        meetingType: availabilities.meetingType,
+      })
+      .from(availabilities)
+      .where(
+        and(
+          eq(availabilities.dayOfWeek, dayOfWeek),
+          or(
+            eq(availabilities.meetingType, data.type),
+            eq(availabilities.meetingType, "BOTH")
+          )
+        )
+      );
+
+    // Get active sellers
+    const activeUsers = await db.select().from(users).where(isNull(users.deletedAt));
+    const activeUserIds = new Set(activeUsers.map((u) => u.id));
+
+    // Filter by active users, and check if timeStr is within range
+    const candidateAvails = allAvails.filter((av) => {
+      if (!activeUserIds.has(av.userId)) return false;
+      return timeStr >= av.startTime && timeStr < av.endTime;
+    });
+
+    if (candidateAvails.length === 0) {
+      throw new Error("No hay asesores disponibles para el tipo de cita y horario seleccionados.");
+    }
+
+    // Resolve effective sellers for each candidate (considering transfers)
+    const effectiveCandidatesMap = new Map<string, string>(); // origSellerId -> effectiveSellerId
+    for (const cand of candidateAvails) {
+      const effId = await getEffectiveSellerId(db, cand.userId, bookingDate);
+      // Ensure the effective seller is also active and not deleted
+      if (activeUserIds.has(effId)) {
+        effectiveCandidatesMap.set(cand.userId, effId);
+      }
+    }
+
+    if (effectiveCandidatesMap.size === 0) {
+      throw new Error("No hay asesores disponibles en este momento debido a configuraciones de traspasos.");
+    }
+
+    // Find if candidates have conflicts (appointments already booked at this exact time)
+    const candidates = Array.from(effectiveCandidatesMap.values());
+    const conflictingAppointments = await db
+      .select({
+        sellerId: appointments.sellerId,
+        date: appointments.date,
+      })
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.date, bookingDate),
+          ne(appointments.status, "CANCELLED"),
+          isNull(appointments.deletedAt)
+        )
+      );
+
+    const conflictingSellerIds = new Set(
+      conflictingAppointments.map((a) => a.sellerId)
+    );
+
+    // Find first seller without conflict
+    const freeSeller = candidates.find((sellerId) => !conflictingSellerIds.has(sellerId));
+
+    if (!freeSeller) {
+      throw new Error("Todos los asesores están ocupados en el horario solicitado. Por favor elige otra hora.");
+    }
+
+    finalSellerId = freeSeller;
+  } else {
+    // Direct scheduling: Check for active transfers
+    finalSellerId = await getEffectiveSellerId(db, finalSellerId, bookingDate);
+  }
+
+  // 4. Create Appointment
+  const [newAppointment] = await db
+    .insert(appointments)
+    .values({
+      sellerId: finalSellerId,
+      type: data.type,
+      date: bookingDate,
+      prospectName: data.prospectName,
+      prospectEmail: data.prospectEmail.trim().toLowerCase(),
+      prospectPhone: data.prospectPhone || null,
+      prospectAddress: data.prospectAddress || null,
+      prospectId,
+      sendEmail: data.sendEmail,
+      status: "SCHEDULED",
+    })
+    .returning();
+
+  // 5. Send Email Notifications
+  if (data.sendEmail) {
+    try {
+      const sellerArr = await db.select().from(users).where(eq(users.id, finalSellerId));
+      const seller = sellerArr[0];
+
+      // Get unit identifiers of interest
+      let unitIdentifiers: string[] = [];
+      if (data.unitsOfInterest && data.unitsOfInterest.length > 0) {
+        const matchingUnits = await db
+          .select({ identifier: units.identifier })
+          .from(units)
+          .where(and(isNull(units.deletedAt), inArray(units.id, data.unitsOfInterest)));
+        unitIdentifiers = matchingUnits.map((u) => u.identifier);
+      }
+
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (resendApiKey) {
+        const resend = new Resend(resendApiKey);
+
+        // Sender Configuration (Fallback to default if project doesn't have custom config)
+        const fromEmail = "Santa Fe 190 <no-reply@kayen.work>";
+
+        // Send to prospect
+        await resend.emails.send({
+          from: fromEmail,
+          to: [data.prospectEmail.trim().toLowerCase()],
+          subject: `Confirmación de Cita - ${config.company?.buildingName || "Santa Fe 190"}`,
+          react: AppointmentEmail({
+            prospectName: data.prospectName,
+            prospectEmail: data.prospectEmail,
+            prospectPhone: data.prospectPhone,
+            prospectAddress: data.prospectAddress,
+            date: bookingDate,
+            type: data.type,
+            units: unitIdentifiers,
+            sellerName: seller?.name || "Asesor Inmobiliario",
+            sellerEmail: seller?.email || "ventas@santafe.com",
+            isForSeller: false,
+          }),
+        });
+
+        // Send to seller
+        if (seller?.email) {
+          await resend.emails.send({
+            from: fromEmail,
+            to: [seller.email],
+            subject: `Nueva Cita Asignada - ${data.prospectName}`,
+            react: AppointmentEmail({
+              prospectName: data.prospectName,
+              prospectEmail: data.prospectEmail,
+              prospectPhone: data.prospectPhone,
+              prospectAddress: data.prospectAddress,
+              date: bookingDate,
+              type: data.type,
+              units: unitIdentifiers,
+              sellerName: seller.name,
+              sellerEmail: seller.email,
+              isForSeller: true,
+            }),
+          });
+        }
+      } else {
+        console.warn("RESEND_API_KEY is not set. Skipping email alerts.");
+      }
+    } catch (emailErr) {
+      console.error("Error sending email alert:", emailErr);
+    }
+  }
+
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/contact");
+  return newAppointment;
+}
+
+export async function updateAppointmentStatus(id: string, status: "SCHEDULED" | "COMPLETED" | "CANCELLED") {
+  const db = getDb();
+  await db
+    .update(appointments)
+    .set({
+      status,
+      updatedAt: new Date(),
+    })
+    .where(eq(appointments.id, id));
+
+  revalidatePath("/dashboard/calendar");
+}
+
+export async function updateAppointmentNotes(id: string, notes: string) {
+  const db = getDb();
+  await db
+    .update(appointments)
+    .set({
+      notes,
+      updatedAt: new Date(),
+    })
+    .where(eq(appointments.id, id));
+
+  revalidatePath("/dashboard/calendar");
+}
+
+// ----------------------------------------------------
+// AVAILABILITY ACTIONS
+// ----------------------------------------------------
+
+export async function getAvailabilities(userId?: string) {
+  const db = getDb();
+  const currentUser = await getSessionUser(db);
+  const resolvedUserId = userId ? await resolveUserId(db, userId) : currentUser.id;
+
+  return await db
+    .select()
+    .from(availabilities)
+    .where(eq(availabilities.userId, resolvedUserId))
+    .orderBy(availabilities.dayOfWeek, availabilities.startTime);
+}
+
+export async function saveAvailabilities(userId: string, slotsData: {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  slotDuration: number;
+  meetingType: "VIRTUAL" | "IN_PERSON" | "BOTH";
+}[]) {
+  const db = getDb();
+  const currentUser = await getSessionUser(db);
+  const resolvedUserId = await resolveUserId(db, userId);
+
+  // Authorization check
+  if (currentUser.id !== resolvedUserId && currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
+    throw new Error("No tienes permisos para modificar la disponibilidad de este usuario.");
+  }
+
+  // Remove existing availabilities
+  await db.delete(availabilities).where(eq(availabilities.userId, resolvedUserId));
+
+  // Insert new ones
+  if (slotsData.length > 0) {
+    for (const slot of slotsData) {
+      await db.insert(availabilities).values({
+        userId: resolvedUserId,
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        slotDuration: slot.slotDuration,
+        meetingType: slot.meetingType,
+      });
+    }
+  }
+
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/contact");
+}
+
+// ----------------------------------------------------
+// TRANSFER ACTIONS
+// ----------------------------------------------------
+
+export async function transferCalendar(data: {
+  fromSellerId: string;
+  toSellerId: string;
+  startDate: Date | string;
+  endDate: Date | string;
+  isDefinitive: boolean;
+}) {
+  const db = getDb();
+  const currentUser = await getSessionUser(db);
+  if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
+    throw new Error("Solo los administradores pueden realizar traspasos de calendarios.");
+  }
+  const fromSellerIdResolved = await resolveUserId(db, data.fromSellerId);
+  const toSellerIdResolved = await resolveUserId(db, data.toSellerId);
+  const start = new Date(data.startDate);
+  const end = new Date(data.endDate);
+
+  if (data.isDefinitive) {
+    // DEFINITIVE TRANSFER: Update all appointments directly in the DB
+    await db
+      .update(appointments)
+      .set({
+        sellerId: toSellerIdResolved,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(appointments.sellerId, fromSellerIdResolved),
+          gte(appointments.date, start),
+          isNull(appointments.deletedAt)
+        )
+      );
+  } else {
+    // TEMPORARY TRANSFER: Create transfer rule
+    await db.insert(calendarTransfers).values({
+      fromSellerId: fromSellerIdResolved,
+      toSellerId: toSellerIdResolved,
+      startDate: start,
+      endDate: end,
+    });
+  }
+
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/dashboard/users");
+}
+
+export async function getTransfers() {
+  const db = getDb();
+  
+  // Drizzle self-joins for user names
+  const fromUsers = await db.select().from(users);
+  const userMap = new Map<string, string>();
+  fromUsers.forEach((u) => userMap.set(u.id, u.name));
+
+  const list = await db
+    .select()
+    .from(calendarTransfers)
+    .orderBy(calendarTransfers.startDate);
+
+  return list.map((t) => ({
+    ...t,
+    fromName: userMap.get(t.fromSellerId) || "Desconocido",
+    toName: userMap.get(t.toSellerId) || "Desconocido",
+  }));
+}
+
+export async function deleteTransfer(id: string) {
+  const db = getDb();
+  const currentUser = await getSessionUser(db);
+  if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
+    throw new Error("Solo los administradores pueden eliminar traspasos.");
+  }
+  await db.delete(calendarTransfers).where(eq(calendarTransfers.id, id));
+
+  revalidatePath("/dashboard/calendar");
+}

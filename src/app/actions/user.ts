@@ -1,7 +1,7 @@
 "use server";
 
 import { getDb } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { users, appointments } from "@/lib/db/schema";
 const auth = async () => ({
   user: {
     id: "mock-id",
@@ -11,7 +11,7 @@ const auth = async () => ({
   }
 });
 import bcrypt from "bcryptjs";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export async function getUsers() {
@@ -72,13 +72,30 @@ export async function createUser(data: any) {
   revalidatePath("/dashboard/users");
 }
 
-export async function deleteUser(id: string) {
+export async function deleteUser(id: string, transferToId?: string) {
   const session = await auth();
   if (!session || session.user.role !== "SUPER_ADMIN") {
     throw new Error("Unauthorized: Only Super Admin can delete users");
   }
 
   const db = getDb();
+
+  if (transferToId) {
+    await db
+      .update(appointments)
+      .set({
+        sellerId: transferToId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(appointments.sellerId, id),
+          gte(appointments.date, new Date()), // transfer future appointments
+          isNull(appointments.deletedAt)
+        )
+      );
+  }
+
   await db.update(users).set({ deletedAt: new Date() }).where(eq(users.id, id));
   
   revalidatePath("/dashboard/users");
