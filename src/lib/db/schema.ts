@@ -71,6 +71,30 @@ export const globalSettings = sqliteTable('global_settings', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
 
+export const buildingFaces = sqliteTable('building_faces', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  dayBackground: text('day_background'),
+  dayBackgroundVideo: text('day_background_video'),
+  dayHighlight: text('day_highlight'),
+  dayIntroVideo: text('day_intro_video'),
+  dayToLeftTransition: text('day_to_left_transition'),
+  dayToRightTransition: text('day_to_right_transition'),
+  nightBackground: text('night_background'),
+  nightBackgroundVideo: text('night_background_video'),
+  nightHighlight: text('night_highlight'),
+  nightIntroVideo: text('night_intro_video'),
+  nightToLeftTransition: text('night_to_left_transition'),
+  nightToRightTransition: text('night_to_right_transition'),
+  dayToNightTransition: text('day_to_night_transition'),
+  nightToDayTransition: text('night_to_day_transition'),
+  order: integer('order').default(0).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+});
+
+
 export const media = sqliteTable('media', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   title: text('title').notNull(),

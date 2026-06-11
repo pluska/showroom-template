@@ -3,7 +3,6 @@ import { useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import gsap from 'gsap';
-import { buildingFaces } from '@/data/buildingData';
 import { preloadImages } from '@/utils/preload';
 
 interface SceneControllerProps {
@@ -11,7 +10,7 @@ interface SceneControllerProps {
 }
 
 export default function SceneController({ isHighlighted }: SceneControllerProps) {
-  const { viewState, endTransition, currentRoom, currentFace, confirmRotation, finishRotation, transitionUrl, timeOfDay, finishTimeLapse, targetDestination, floorsData } = useStore();
+  const { viewState, endTransition, currentRoom, currentFace, confirmRotation, finishRotation, transitionUrl, timeOfDay, finishTimeLapse, targetDestination, floorsData, buildingFacesData } = useStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   const bgVideoRef = useRef<HTMLVideoElement>(null);
   const panoRef = useRef<HTMLDivElement>(null);
@@ -27,8 +26,9 @@ export default function SceneController({ isHighlighted }: SceneControllerProps)
       
       // If we have an explicit transitionUrl (e.g. Intro), use it.
       // Otherwise use the face's introVideo (generic enter)
-      const currentAssetSet = buildingFaces[currentFace][timeOfDay];
-      videoRef.current.src = transitionUrl || currentAssetSet.introVideo || ""; 
+      const currentFaceData = buildingFacesData[currentFace] || buildingFacesData[0];
+      const currentAssetSet = currentFaceData ? currentFaceData[timeOfDay] : null;
+      videoRef.current.src = transitionUrl || currentAssetSet?.introVideo || ""; 
       
       videoRef.current.currentTime = 0;
       videoRef.current.play().catch(e => console.error("Video play failed:", e));
@@ -57,7 +57,7 @@ export default function SceneController({ isHighlighted }: SceneControllerProps)
       // For now, let's fade in quickly to avoid flash
       gsap.to(videoRef.current, { opacity: 1, duration: 0 });
     }
-  }, [viewState, transitionUrl]);
+  }, [viewState, transitionUrl, currentFace, timeOfDay, buildingFacesData]);
 
   const handleVideoEnd = () => {
     // If wrapping up a room transition
@@ -75,7 +75,7 @@ export default function SceneController({ isHighlighted }: SceneControllerProps)
             
             // Assume Intro (Lobby)
             // Just transition to IDLE in the Lobby
-             // Fade out video to reveal Lobby
+            // Fade out video to reveal Lobby
             if (videoRef.current) {
                  gsap.to(videoRef.current, {
                     opacity: 0,
@@ -131,27 +131,31 @@ export default function SceneController({ isHighlighted }: SceneControllerProps)
     }
   };
 
+  const currentFaceData = buildingFacesData[currentFace] || buildingFacesData[0];
+  const currentAssetSet = currentFaceData ? currentFaceData[timeOfDay] : null;
+
   return (
     <div className="w-full h-full relative bg-black overflow-hidden">
       
-      {/* LAYER 1: 360 Panorama (Static background for now) */}
       {/* LAYER 1: 360 Panorama (Static background for now) */}
       <div ref={panoRef} className="absolute inset-0 bg-gray-800 flex items-center justify-center">
         {/* If we are in the Exterior/Masterplan view, show faces. Otherwise show room name */}
         {currentRoom === 'Lobby' ? ( // Assuming Lobby/Exterior is the default starting point where rotation happens
            <div className="relative w-full h-full">
-              <img 
-                src={buildingFaces[currentFace][timeOfDay].background} 
-                alt={buildingFaces[currentFace].name} 
-                className="w-full h-full object-cover"
-              />
+              {currentAssetSet?.background && (
+                <img 
+                  src={currentAssetSet.background} 
+                  alt={currentFaceData?.name || "Edificio"} 
+                  className="w-full h-full object-cover"
+                />
+              )}
 
               {/* Background Video Layer - Fades in when ready */}
-              {buildingFaces[currentFace][timeOfDay].backgroundVideo && (
+              {currentAssetSet?.backgroundVideo && (
                 <video
-                  key={`${currentFace}-${timeOfDay}-${buildingFaces[currentFace][timeOfDay].backgroundVideo}`}
+                  key={`${currentFace}-${timeOfDay}-${currentAssetSet.backgroundVideo}`}
                   ref={bgVideoRef}
-                  src={buildingFaces[currentFace][timeOfDay].backgroundVideo}
+                  src={currentAssetSet.backgroundVideo}
                   autoPlay
                   muted
                   loop
@@ -171,16 +175,18 @@ export default function SceneController({ isHighlighted }: SceneControllerProps)
                 />
               )}
 
-              {isHighlighted && buildingFaces[currentFace][timeOfDay].highlight && (
+              {isHighlighted && currentAssetSet?.highlight && (
                  <img 
-                    src={buildingFaces[currentFace][timeOfDay].highlight} 
+                    src={currentAssetSet.highlight} 
                     className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300 z-10"
                     alt="Highlight"
                  />
               )}
-              <div className="absolute top-10 left-10 p-4 bg-black/50 text-white z-20">
-                <h1 className="text-2xl font-light tracking-widest">{buildingFaces[currentFace].name}</h1>
-              </div>
+              {currentFaceData?.name && (
+                <div className="absolute top-10 left-10 p-4 bg-black/50 text-white z-20">
+                  <h1 className="text-2xl font-light tracking-widest">{currentFaceData.name}</h1>
+                </div>
+              )}
            </div>
         ) : (
             <h1 className="text-4xl text-white font-light tracking-widest">

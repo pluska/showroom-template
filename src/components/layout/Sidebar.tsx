@@ -43,6 +43,7 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
     const router = useRouter();
     const pathname = usePathname();
     const floorsData = useStore(state => state.floorsData);
+    const buildingFacesData = useStore(state => state.buildingFacesData);
 
     const [activeFeatures, setActiveFeatures] = useState<any[]>(defaultFeatures);
 
@@ -56,24 +57,27 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
 
     // Preload triggers (Part 2 of requested strategy)
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && buildingFacesData.length > 0) {
             // "El edificio" (Showroom) Critical Path
-            const face0 = buildingFaces[0];
-            // 1. Intro Video (Transition from Homepage)
-            preloadVideo(getAssetUrl('videos/walks/trans_intro_to_0.mp4')).catch(() => { });
-            // 2. Face 0 Day Background
-            preloadImages([face0.day.background]).catch(() => { });
+            const face0 = buildingFacesData[0];
+            if (face0) {
+                // 1. Intro Video (Transition from Homepage)
+                preloadVideo(getAssetUrl('videos/walks/trans_intro_to_0.mp4')).catch(() => { });
+                // 2. Face 0 Day Background
+                if (face0.day?.background) preloadImages([face0.day.background]).catch(() => { });
 
-            // "Plantas" (Floors) Critical Path
-            // 1. Central Walk Video (used as transition to floors)
-            if (face0.day.introVideo) preloadVideo(face0.day.introVideo).catch(() => { });
+                // "Plantas" (Floors) Critical Path
+                // 1. Central Walk Video (used as transition to floors)
+                if (face0.day?.introVideo) preloadVideo(face0.day.introVideo).catch(() => { });
+            }
+            
             // 2. Default Floor 9 Image
             const defaultFloor = floorsData.find(f => f.id === '9');
             if (defaultFloor) {
                 preloadImages([defaultFloor.floorPlanImage]).catch(() => { });
             }
         }
-    }, [isOpen]);
+    }, [isOpen, buildingFacesData, floorsData]);
 
     const menuItems = activeFeatures.filter(item => item.active);
 
@@ -94,8 +98,6 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
                 }
                 // Route Floors through Showroom for the transition video
                 else if (path === '/plantas') {
-                    // For Next.js, we might need a different strategy or just jump to showroom with floor param
-                    // Assuming we want the transition:
                     router.push('/showroom?transition=floors&targetPath=/plantas');
                 }
                 else {
@@ -112,16 +114,18 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
         if (!key) return;
 
         // Fire-and-forget preloading (no await)
-        if (key === 'showroom') {
-            const face0 = buildingFaces[0];
-            // Preload Intro Video (Explicit path to match Homepage)
-            preloadVideo(getAssetUrl('videos/walks/trans_intro_to_0.mp4')).catch(() => { });
-            preloadImages([face0.day.background]).catch(() => { });
+        if (key === 'showroom' && buildingFacesData.length > 0) {
+            const face0 = buildingFacesData[0];
+            if (face0) {
+                // Preload Intro Video (Explicit path to match Homepage)
+                preloadVideo(getAssetUrl('videos/walks/trans_intro_to_0.mp4')).catch(() => { });
+                if (face0.day?.background) preloadImages([face0.day.background]).catch(() => { });
+            }
         }
-        else if (key === 'floors') {
+        else if (key === 'floors' && buildingFacesData.length > 0) {
             // Preload default floor (Floor 9) AND the Central Walk video
-            const face0 = buildingFaces[0];
-            if (face0.day.introVideo) preloadVideo(face0.day.introVideo).catch(() => { });
+            const face0 = buildingFacesData[0];
+            if (face0 && face0.day?.introVideo) preloadVideo(face0.day.introVideo).catch(() => { });
 
             const defaultFloor = floorsData.find(f => f.id === '9');
             if (defaultFloor) {

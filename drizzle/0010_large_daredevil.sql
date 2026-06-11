@@ -1,0 +1,22 @@
+CREATE TABLE `building_faces` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`name` text NOT NULL,
+	`day_background` text,
+	`day_background_video` text,
+	`day_highlight` text,
+	`day_intro_video` text,
+	`day_to_left_transition` text,
+	`day_to_right_transition` text,
+	`night_background` text,
+	`night_background_video` text,
+	`night_highlight` text,
+	`night_intro_video` text,
+	`night_to_left_transition` text,
+	`night_to_right_transition` text,
+	`day_to_night_transition` text,
+	`night_to_day_transition` text,
+	`order` integer DEFAULT 0 NOT NULL,
+	`created_at` integer,
+	`updated_at` integer,
+	`deleted_at` integer
+);

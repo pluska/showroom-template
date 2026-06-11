@@ -8,7 +8,6 @@ import { Sun, Moon, Rotate3d } from 'lucide-react';
 import { preloadImages, preloadVideo } from '@/utils/preload';
 import { getAssetUrl } from '@/utils/assets';
 import Loader from '@/components/UI/Loader';
-import { buildingFaces } from '@/data/buildingData';
 import FullScreenToggle from '@/components/UI/FullScreenToggle';
 import { showroomConfig } from '@/data/showroom';
 
@@ -26,6 +25,7 @@ const ShowroomContent = () => {
   const [isHoveringIngresar, setIsHoveringIngresar] = useState(false);
   const currentFace = useStore(state => state.currentFace);
   const isLoadingAssets = useStore(state => state.isLoadingAssets);
+  const buildingFacesData = useStore(state => state.buildingFacesData);
 
   // Reset state on mount or params change
   useEffect(() => {
@@ -49,8 +49,8 @@ const ShowroomContent = () => {
           ...(shouldResetToDay ? { timeOfDay: 'day' } : {})
         });
         
-        if (transition) {
-             const face0 = buildingFaces[0];
+        if (transition && buildingFacesData.length > 0) {
+             const face0 = buildingFacesData[0];
              
              if (transition === 'intro') {
                  // Showroom: Matches Homepage "Entrar" video
@@ -63,13 +63,7 @@ const ShowroomContent = () => {
                  });
              } else if (transition === 'floors') {
                  // Plantas: Uses the generic "Central View" walk (Day/Night sensitive)
-                 // NOTE: Since we are in the showroom page, 'floors' transition essentially means 
-                 // we are PREPARING to go to floors, or we came FROM floors?
-                 // Original logic implies we are playing a video related to floors? 
-                 // Actually original sidebar logic: navigate('/showroom', { state: { transition: 'floors', targetPath: path } });
-                 // This plays the video THEN navigates to the targetPath.
-                 
-                 const floorsVideoUrl = timeOfDay === 'day' ? face0.day.introVideo : face0.night.introVideo;
+                 const floorsVideoUrl = timeOfDay === 'day' ? face0?.day?.introVideo : face0?.night?.introVideo;
                  
                  if (floorsVideoUrl) {
                      useStore.setState({ 
@@ -82,30 +76,30 @@ const ShowroomContent = () => {
         }
 
         try {
-            const face0 = buildingFaces[0];
-            const determinedTime = shouldResetToDay ? 'day' : (transition === 'floors' ? timeOfDay : 'day');
-            
-            const mainAsset = determinedTime === 'day' ? face0.day.background : face0.night.background;
-            const secondaryAsset = determinedTime === 'day' ? face0.night.background : face0.day.background;
+            if (buildingFacesData.length > 0) {
+                const face0 = buildingFacesData[0];
+                const determinedTime = shouldResetToDay ? 'day' : (transition === 'floors' ? timeOfDay : 'day');
+                
+                const mainAsset = determinedTime === 'day' ? face0?.day?.background : face0?.night?.background;
+                const secondaryAsset = determinedTime === 'day' ? face0?.night?.background : face0?.day?.background;
 
-            await preloadImages([mainAsset]);
-            
-            preloadImages([secondaryAsset]).catch(() => {});
-
+                if (mainAsset) await preloadImages([mainAsset]);
+                if (secondaryAsset) preloadImages([secondaryAsset]).catch(() => {});
+            }
         } catch (e) { console.warn("Showroom mount preload failed", e); }
         
         useStore.setState({ isLoadingAssets: false });
     };
 
     initShowroom();
-  }, [searchParams]); // Re-run if params change
+  }, [searchParams, buildingFacesData]); // Re-run if params or faces change
 
   // Proximity Loading Logic
   useEffect(() => {
       // Don't preload if we are transitioning or not in lobby
-      if (currentRoom !== 'Lobby') return;
+      if (currentRoom !== 'Lobby' || buildingFacesData.length === 0) return;
 
-      const currentFaceData = buildingFaces[currentFace];
+      const currentFaceData = buildingFacesData[currentFace] || buildingFacesData[0];
       if (!currentFaceData) return;
 
       const fastImagesToLoad: string[] = []; 
@@ -114,30 +108,42 @@ const ShowroomContent = () => {
 
       // 1. Identify Adjacent Faces
       const adjacentIds = [];
-      if (currentFace === 0) adjacentIds.push(1, 2);
-      else adjacentIds.push(0);
+      if (currentFace === 0) {
+          if (buildingFacesData.length > 1) adjacentIds.push(1);
+          if (buildingFacesData.length > 2) adjacentIds.push(2);
+      } else {
+          adjacentIds.push(0);
+      }
 
       adjacentIds.forEach(id => {
-          const face = buildingFaces[id];
+          const face = buildingFacesData[id];
+          if (!face) return;
           const assetSet = timeOfDay === 'day' ? face.day : face.night;
           
-          fastImagesToLoad.push(assetSet.background);
+          if (assetSet?.background) fastImagesToLoad.push(assetSet.background);
           
-          if (id === 1 && currentFace === 0) videosToLoad.push(currentFaceData[timeOfDay].transitions.toRight); 
-          if (id === 2 && currentFace === 0) videosToLoad.push(currentFaceData[timeOfDay].transitions.toLeft);
-          if (currentFace !== 0) videosToLoad.push(currentFaceData[timeOfDay].transitions.toLeft);
+          const currentAssetSet = currentFaceData[timeOfDay];
+          if (id === 1 && currentFace === 0 && currentAssetSet?.transitions?.toRight) {
+              videosToLoad.push(currentAssetSet.transitions.toRight); 
+          }
+          if (id === 2 && currentFace === 0 && currentAssetSet?.transitions?.toLeft) {
+              videosToLoad.push(currentAssetSet.transitions.toLeft);
+          }
+          if (currentFace !== 0 && currentAssetSet?.transitions?.toLeft) {
+              videosToLoad.push(currentAssetSet.transitions.toLeft);
+          }
       });
 
       // 2. Identify Alt Time of Day
-      if (timeOfDay === 'day') {
+      if (timeOfDay === 'day' && currentFaceData?.night?.background) {
           secondaryImagesToLoad.push(currentFaceData.night.background);
-      } else {
+      } else if (timeOfDay === 'night' && currentFaceData?.day?.background) {
           secondaryImagesToLoad.push(currentFaceData.day.background);
       }
 
       // 3. Preload "Ingresar" Walk Video
       if (currentFace === 0) {
-          const walkVideo = timeOfDay === 'day' ? currentFaceData.day.introVideo : currentFaceData.night.introVideo;
+          const walkVideo = timeOfDay === 'day' ? currentFaceData.day?.introVideo : currentFaceData.night?.introVideo;
           if (walkVideo) videosToLoad.push(walkVideo);
       }
 
@@ -163,10 +169,15 @@ const ShowroomContent = () => {
           clearTimeout(secondaryTimer);
       };
 
-  }, [currentFace, timeOfDay, currentRoom]); 
+  }, [currentFace, timeOfDay, currentRoom, buildingFacesData]); 
 
-  const showLeftButton = currentRoom === 'Lobby' && viewState === 'IDLE' && (currentFace === 0 || currentFace === 1);
-  const showRightButton = currentRoom === 'Lobby' && viewState === 'IDLE' && (currentFace === 0 || currentFace === 2);
+  const currentFaceData = buildingFacesData[currentFace] || buildingFacesData[0];
+  const hasLeftTransition = currentFaceData ? !!currentFaceData[timeOfDay]?.transitions?.toLeft : false;
+  const hasRightTransition = currentFaceData ? !!currentFaceData[timeOfDay]?.transitions?.toRight : false;
+
+  const showLeftButton = currentRoom === 'Lobby' && viewState === 'IDLE' && hasLeftTransition;
+  const showRightButton = currentRoom === 'Lobby' && viewState === 'IDLE' && hasRightTransition;
+
 
   return (
     <div className="font-sans relative h-full w-full overflow-hidden">

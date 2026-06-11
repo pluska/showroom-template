@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { buildingFaces } from '../data/buildingData';
+import { buildingFaces, type BuildingFace } from '../data/buildingData';
 import { preloadVideo, preloadImages } from '../utils/preload';
 import { type Floor } from '../data/floors';
 
@@ -13,6 +13,10 @@ interface ShowroomState {
   transitionUrl: string | null;
   targetDestination: string | null; // e.g. 'Lobby', 'Floors'
   timeOfDay: 'day' | 'night';
+  
+  // Building Faces Data
+  buildingFacesData: BuildingFace[];
+  setBuildingFacesData: (faces: BuildingFace[]) => void;
   
   // Floors Inventory Data
   floorsData: Floor[];
@@ -60,7 +64,9 @@ export const useStore = create<ShowroomState>((set, get) => ({
   isGlobalLoading: false,
   isBrochureOpen: false,
   floorsData: [],
+  buildingFacesData: buildingFaces, // fallback fallback default
   
+  setBuildingFacesData: (faces) => set({ buildingFacesData: faces }),
   setFloorsData: (floors) => set({ floorsData: floors }),
   setLoading: (loading) => set({ isLoadingAssets: loading }),
   setGlobalLoading: (loading) => set({ isGlobalLoading: loading }),
@@ -99,7 +105,8 @@ export const useStore = create<ShowroomState>((set, get) => ({
   
   startTransition: (destination) => {
     const state = get();
-    const face = buildingFaces[state.currentFace];
+    const face = state.buildingFacesData[state.currentFace] || state.buildingFacesData[0];
+    if (!face) return;
     const assetSet = face[state.timeOfDay];
     // Use the introWalk video for the current face/time as the transition to inside
     const videoUrl = assetSet.introVideo;
@@ -119,13 +126,15 @@ export const useStore = create<ShowroomState>((set, get) => ({
 
   rotateBuilding: async (direction) => {
     const state = get();
-    const totalFaces = buildingFaces.length;
+    const totalFaces = state.buildingFacesData.length;
     if (totalFaces <= 1) return;
 
     let nextFaceIndex: number;
     let videoUrl: string = '';
 
-    const currentFaceData = buildingFaces[state.currentFace];
+    const currentFaceData = state.buildingFacesData[state.currentFace] || state.buildingFacesData[0];
+    if (!currentFaceData) return;
+    
     // Access transitions based on current time of day
     const timeOfDayData = currentFaceData[state.timeOfDay];
 
@@ -154,41 +163,43 @@ export const useStore = create<ShowroomState>((set, get) => ({
     set({ isLoadingAssets: true });
     
     // Determine the next background image to preload
-    const nextFaceData = buildingFaces[nextFaceIndex];
-    const nextTimeData = nextFaceData[state.timeOfDay]; // 'day' or 'night'
-    const nextBackgroundUrl = nextTimeData.background;
+    const nextFaceData = state.buildingFacesData[nextFaceIndex];
+    if (nextFaceData) {
+      const nextTimeData = nextFaceData[state.timeOfDay]; // 'day' or 'night'
+      const nextBackgroundUrl = nextTimeData.background;
 
-    try {
-        // OPTIMIZATION:
-        // We only STRICTLY need the video to start the transition.
-        // The background image is needed ONLY when the video ends.
-        
-        // 1. Race: Video Load vs Timeout (1.5s)
-        // If the video is already cached, preloadVideo resolves instantly.
-        // If it takes too long (network lag), we skip the video to preserve flow.
-        let videoReady = false;
-        try {
-            await Promise.race([
-                preloadVideo(videoUrl).then(() => { videoReady = true; }),
-                new Promise(resolve => setTimeout(resolve, 1500))
-            ]);
-        } catch(e) {}
-        
-        if (!videoReady) {
-             console.warn("Transition video slow/not ready - Skipping for instant feedback");
-             // Just snap to the next face immediately
-             set({ currentFace: nextFaceIndex, isLoadingAssets: false });
-             return;
-        }
-        
-        // 2. Start preloading the image in the background (fire and forget)
-        // We don't await this because the video duration usually covers the download time.
-        // Even if it doesn't, the browser will render it as it arrives.
-        preloadImages([nextBackgroundUrl]).catch((e) => console.warn('Background image preload failed', e));
+      try {
+          // OPTIMIZATION:
+          // We only STRICTLY need the video to start the transition.
+          // The background image is needed ONLY when the video ends.
+          
+          // 1. Race: Video Load vs Timeout (1.5s)
+          // If the video is already cached, preloadVideo resolves instantly.
+          // If it takes too long (network lag), we skip the video to preserve flow.
+          let videoReady = false;
+          try {
+              await Promise.race([
+                  preloadVideo(videoUrl).then(() => { videoReady = true; }),
+                  new Promise(resolve => setTimeout(resolve, 1500))
+              ]);
+          } catch(e) {}
+          
+          if (!videoReady) {
+               console.warn("Transition video slow/not ready - Skipping for instant feedback");
+               // Just snap to the next face immediately
+               set({ currentFace: nextFaceIndex, isLoadingAssets: false });
+               return;
+          }
+          
+          // 2. Start preloading the image in the background (fire and forget)
+          // We don't await this because the video duration usually covers the download time.
+          // Even if it doesn't, the browser will render it as it arrives.
+          preloadImages([nextBackgroundUrl]).catch((e) => console.warn('Background image preload failed', e));
 
-    } catch (e) {
-        console.warn('Failed to preload rotation video', e);
-        // If video fails, we might just snap? For now we proceed to try.
+      } catch (e) {
+          console.warn('Failed to preload rotation video', e);
+          // If video fails, we might just snap? For now we proceed to try.
+      }
     }
     
     set({ 
@@ -218,7 +229,8 @@ export const useStore = create<ShowroomState>((set, get) => ({
 
   toggleTimeOfDay: async () => {
     const state = get();
-    const currentFaceData = buildingFaces[state.currentFace];
+    const currentFaceData = state.buildingFacesData[state.currentFace] || state.buildingFacesData[0];
+    if (!currentFaceData) return;
     const isDay = state.timeOfDay === 'day';
     const videoUrl = isDay ? currentFaceData.dayToNightTransition : currentFaceData.nightToDayTransition;
     
@@ -242,3 +254,4 @@ export const useStore = create<ShowroomState>((set, get) => ({
     transitionUrl: null
   })),
 }));
+

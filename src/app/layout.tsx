@@ -5,6 +5,7 @@ import "./globals.css";
 import config from "@/config/config";
 import StoreInitializer from "@/components/layout/StoreInitializer";
 import { getFloorsData } from "@/app/actions/units";
+import { getBuildingFacesData } from "@/app/actions/building";
 import { type Floor } from "@/data/floors";
 
 const montserrat = Montserrat({
@@ -28,10 +29,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   let floorsData: Floor[] = [];
+  let buildingFacesData: any[] = [];
   try {
     floorsData = (await getFloorsData()) as Floor[];
   } catch (e) {
     console.error("Failed to load initial floorsData during SSR:", e);
+  }
+  try {
+    buildingFacesData = await getBuildingFacesData();
+  } catch (e) {
+    console.error("Failed to load initial buildingFacesData during SSR:", e);
   }
 
   return (
@@ -61,7 +68,8 @@ export default async function RootLayout({
       <body
         className={`${montserrat.variable} ${inter.variable} antialiased h-screen w-screen overflow-hidden bg-base-100 text-base-content`}
       >
-        <StoreInitializer initialFloorsData={floorsData} />
+        <StoreInitializer initialFloorsData={floorsData} initialBuildingFacesData={buildingFacesData} />
+
         {children}
       </body>
     </html>
