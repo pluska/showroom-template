@@ -100,3 +100,39 @@ export async function deleteUser(id: string, transferToId?: string) {
   
   revalidatePath("/dashboard/users");
 }
+
+export async function updateUser(id: string, data: any) {
+  const session = await auth();
+  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
+    throw new Error("Unauthorized");
+  }
+
+  const db = getDb();
+
+  const updateData: any = {
+    name: data.name,
+    email: data.email,
+    updatedAt: new Date(),
+  };
+
+  // Validate roles and limits updates
+  if (session.user.role === "SUPER_ADMIN") {
+    if (data.role) updateData.role = data.role;
+    if (data.adminLimit !== undefined) updateData.adminLimit = data.adminLimit;
+  } else {
+    // ADMIN can only update SELLERs
+    const targetUserArr = await db.select().from(users).where(eq(users.id, id));
+    const targetUser = targetUserArr[0];
+    if (!targetUser || targetUser.role !== "SELLER") {
+      throw new Error("Unauthorized: Admins can only edit Sellers");
+    }
+  }
+
+  if (data.password) {
+    updateData.password = await bcrypt.hash(data.password, 10);
+  }
+
+  await db.update(users).set(updateData).where(eq(users.id, id));
+  
+  revalidatePath("/dashboard/users");
+}

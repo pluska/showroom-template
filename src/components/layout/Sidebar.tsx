@@ -9,6 +9,7 @@ import { buildingFaces } from '@/data/buildingData';
 import config from '@/config/config';
 
 import { getFeatures } from '@/app/actions/features';
+import ThemeToggle from '@/components/UI/ThemeToggle';
 
 interface SidebarProps {
     isOpen?: boolean;
@@ -155,18 +156,21 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
             )}
 
             {/* Sidebar Panel */}
-            <div className={`fixed top-0 left-0 bg-white z-[70] shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col 
+            <div className={`fixed top-0 left-0 bg-white dark:bg-base-300 z-[70] shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col 
         ${isForcedLandscape ? 'w-full h-full' : 'h-full w-[300px]'}
         ${isOpen ? 'translate-x-0 pointer-events-auto' : '-translate-x-full pointer-events-none'}
       `}>
 
                 {/* Header (Common) */}
                 {!isForcedLandscape && (
-                    <div className="pt-8 pb-4 px-6 flex justify-between items-start relative bg-white shrink-0">
-                        <div className="w-full flex justify-center">
-                            <img src={getAssetUrl('identity/logo_full_black.png')} alt="Thompson Logo" className="h-24 object-contain" />
+                    <div className="pt-8 pb-4 px-6 flex justify-between items-start relative bg-white dark:bg-base-300 shrink-0">
+                        <div className="absolute top-6 left-6 z-10">
+                            <ThemeToggle />
                         </div>
-                        <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 hover:text-black transition-colors cursor-pointer">
+                        <div className="w-full flex justify-center">
+                            <img src={getAssetUrl('identity/logo_full_black.png')} alt="Thompson Logo" className="h-24 object-contain dark:invert" />
+                        </div>
+                        <button onClick={onClose} className="absolute top-6 right-6 text-gray-400 dark:text-gray-500 hover:text-black dark:hover:text-white transition-colors cursor-pointer z-10">
                             <X size={20} />
                         </button>
                     </div>
@@ -175,14 +179,17 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
                 {/* FORCED LANDSCAPE LAYOUT (Grid) */}
                 {isForcedLandscape ? (
                     <div className="flex-1 flex flex-col p-6 relative">
-                        {/* Close Button */}
-                        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-gray-100 rounded-full text-gray-600 hover:text-black hover:bg-gray-200 transition-colors z-20">
-                            <X size={24} />
-                        </button>
+                        {/* Controls Container */}
+                        <div className="absolute top-6 right-6 flex items-center gap-3 z-20">
+                            <ThemeToggle />
+                            <button onClick={onClose} className="p-2 bg-gray-100 dark:bg-base-200 rounded-full text-gray-600 dark:text-gray-200 hover:text-black dark:hover:text-white hover:bg-gray-200 dark:hover:bg-base-100 transition-colors cursor-pointer">
+                                <X size={24} />
+                            </button>
+                        </div>
 
                         {/* Logo - Smaller, Top Left or Center */}
                         <div className="absolute top-6 left-6 z-20">
-                            <img src={getAssetUrl('identity/logo_full_black.png')} alt="Logo" className="h-10 object-contain" />
+                            <img src={getAssetUrl('identity/logo_full_black.png')} alt="Logo" className="h-10 object-contain dark:invert" />
                         </div>
 
                         {/* Grid Content */}
@@ -195,16 +202,16 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
                                         <button
                                             key={item.label}
                                             onClick={() => handleNavigation(item.path, (item as any).action)}
-                                            className={`flex flex-col items-center justify-center gap-3 p-4 rounded-xl transition-all hover:bg-gray-50 group
-                                        ${active ? 'bg-orange-50/50' : ''}
+                                            className={`flex flex-col items-center justify-center gap-3 p-4 rounded-xl transition-all hover:bg-gray-50 dark:hover:bg-base-200/50 group
+                                        ${active ? 'bg-orange-50/50 dark:bg-brand-orange/10' : ''}
                                     `}
                                         >
-                                            <div className={`p-4 rounded-full transition-all group-hover:scale-110 shadow-sm border border-gray-100
-                                         ${active ? 'bg-brand-orange text-white' : 'bg-white text-gray-500 group-hover:text-black'}
+                                            <div className={`p-4 rounded-full transition-all group-hover:scale-110 shadow-sm border border-gray-100 dark:border-base-200
+                                         ${active ? 'bg-brand-orange text-white' : 'bg-white dark:bg-base-200 text-gray-500 dark:text-gray-400 group-hover:text-black dark:group-hover:text-white'}
                                     `}>
                                                 <IconComponent size={28} strokeWidth={1.5} />
                                             </div>
-                                            <span className={`text-xs font-bold uppercase tracking-wider ${active ? 'text-brand-orange' : 'text-gray-500 group-hover:text-black'}`}>
+                                            <span className={`text-xs font-bold uppercase tracking-wider ${active ? 'text-brand-orange' : 'text-gray-500 dark:text-gray-400 group-hover:text-black dark:group-hover:text-white'}`}>
                                                 {item.label}
                                             </span>
                                         </button>
@@ -214,7 +221,7 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
                         </div>
 
                         {/* Footer - Bottom Row */}
-                        <div className="absolute bottom-6 left-0 w-full flex justify-center items-center gap-6 text-gray-400">
+                        <div className="absolute bottom-6 left-0 w-full flex justify-center items-center gap-6 text-gray-400 dark:text-gray-500">
                             <div className="flex gap-4">
                                 {config.company?.buildingSocials?.facebook && (
                                     <a href={config.company.buildingSocials.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-brand-orange transition-colors"><Facebook size={18} /></a>
@@ -226,7 +233,7 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
                                     <a href={config.company.buildingSocials.tiktok} target="_blank" rel="noopener noreferrer" className="hover:text-brand-orange transition-colors"><TikTokIcon size={18} /></a>
                                 )}
                             </div>
-                            <div className="h-4 w-px bg-gray-200" />
+                            <div className="h-4 w-px bg-gray-200 dark:bg-base-100" />
                             <p className="text-[10px] font-secondary uppercase tracking-widest text-brand-orange font-bold">
                                 {config.company?.realStateName || 'KAYEN'}
                             </p>
@@ -246,18 +253,18 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
                                             <button
                                                 onClick={() => handleNavigation(item.path, (item as any).action)}
                                                 onMouseEnter={() => handleMouseEnter((item as any).preloadKey)}
-                                                className={`w-full flex items-center gap-4 px-8 py-3.5 landscape:py-1.5 text-sm font-medium transition-all cursor-pointer hover:bg-gray-50 group border-b border-transparent ${active ? 'text-brand-orange bg-orange-50/50' : 'text-gray-600 hover:text-black'}`}
+                                                className={`w-full flex items-center gap-4 px-8 py-3.5 landscape:py-1.5 text-sm font-medium transition-all cursor-pointer hover:bg-gray-50 dark:hover:bg-base-200/50 group border-b border-transparent ${active ? 'text-brand-orange bg-orange-50/50 dark:bg-brand-orange/10' : 'text-gray-600 dark:text-gray-300 hover:text-black dark:hover:text-white'}`}
                                             >
                                                 <IconComponent
                                                     size={18}
                                                     strokeWidth={1.5}
-                                                    className={`transition-colors group-hover:scale-110 transition-transform ${active ? 'text-brand-orange' : 'text-gray-400 group-hover:text-black'}`}
+                                                    className={`transition-colors group-hover:scale-110 transition-transform ${active ? 'text-brand-orange' : 'text-gray-400 dark:text-gray-500 group-hover:text-black dark:group-hover:text-white'}`}
                                                 />
-                                                <span className={`font-secondary transition-colors tracking-wide ${active ? 'text-brand-orange' : 'text-gray-600 group-hover:text-black'}`}>
+                                                <span className={`font-secondary transition-colors tracking-wide ${active ? 'text-brand-orange' : 'text-gray-600 dark:text-gray-300 group-hover:text-black dark:group-hover:text-white'}`}>
                                                     {item.label}
                                                 </span>
                                             </button>
-                                            <div className="mx-8 border-b border-gray-100" />
+                                            <div className="mx-8 border-b border-gray-100 dark:border-base-200" />
                                         </li>
                                     );
                                 })}
@@ -265,20 +272,20 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
                         </div>
 
                         {/* Footer */}
-                        <div className="p-8 pb-10 landscape:p-4 landscape:pb-4 mt-auto text-center bg-white shrink-0">
+                        <div className="p-8 pb-10 landscape:p-4 landscape:pb-4 mt-auto text-center bg-white dark:bg-base-300 shrink-0">
                             <div className="flex justify-center gap-4 mb-6 landscape:mb-2">
                                 {config.company?.buildingSocials?.facebook && (
-                                    <a href={config.company.buildingSocials.facebook} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500 hover:text-black transition-all cursor-pointer hover:text-brand-orange">
+                                    <a href={config.company.buildingSocials.facebook} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-gray-50 dark:bg-base-200 rounded-full hover:bg-gray-100 dark:hover:bg-base-100 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-all cursor-pointer hover:text-brand-orange">
                                         <Facebook size={16} />
                                     </a>
                                 )}
                                 {config.company?.buildingSocials?.instagram && (
-                                    <a href={config.company.buildingSocials.instagram} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500 hover:text-black transition-all cursor-pointer hover:text-brand-orange">
+                                    <a href={config.company.buildingSocials.instagram} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-gray-50 dark:bg-base-200 rounded-full hover:bg-gray-100 dark:hover:bg-base-100 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-all cursor-pointer hover:text-brand-orange">
                                         <Instagram size={16} />
                                     </a>
                                 )}
                                 {config.company?.buildingSocials?.tiktok && (
-                                    <a href={config.company.buildingSocials.tiktok} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-gray-50 rounded-full hover:bg-gray-100 text-gray-500 hover:text-black transition-all cursor-pointer hover:text-brand-orange">
+                                    <a href={config.company.buildingSocials.tiktok} target="_blank" rel="noopener noreferrer" className="p-2.5 bg-gray-50 dark:bg-base-200 rounded-full hover:bg-gray-100 dark:hover:bg-base-100 text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white transition-all cursor-pointer hover:text-brand-orange">
                                         <TikTokIcon size={16} />
                                     </a>
                                 )}
@@ -286,7 +293,7 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
 
                             <div className="space-y-1">
                                 <p className="text-xs text-brand-orange font-bold uppercase tracking-widest">{config.company?.realStateName || 'KAYEN'}</p>
-                                <p className="text-[10px] text-gray-400 font-secondary">{new Date().getFullYear()}© {config.company?.developer || 'RIVISION.pe'}</p>
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 font-secondary">{new Date().getFullYear()}© {config.company?.developer || 'RIVISION.pe'}</p>
                             </div>
                         </div>
                     </>

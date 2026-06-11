@@ -636,7 +636,7 @@ export default function CalendarDashboard({
                   <option value="ALL">Todos los asesores</option>
                   {sellersList.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({s.role})
+                      {s.name}
                     </option>
                   ))}
                 </select>
@@ -862,7 +862,7 @@ export default function CalendarDashboard({
                 >
                   <option value="">-- Seleccionar vendedor --</option>
                   {sellersList.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
@@ -877,7 +877,7 @@ export default function CalendarDashboard({
                 >
                   <option value="">-- Seleccionar destinatario --</option>
                   {sellersList.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
@@ -1191,7 +1191,7 @@ export default function CalendarDashboard({
                     >
                       <option value="">-- Asesor Automático --</option>
                       {sellersList.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                        <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
                   </div>
