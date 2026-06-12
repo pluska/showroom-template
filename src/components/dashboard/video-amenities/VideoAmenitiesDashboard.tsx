@@ -120,7 +120,10 @@ export default function VideoAmenitiesDashboard({ initialMedia }: VideoAmenities
     <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto animate-fade-in pb-12">
       {/* Header */}
       <div className="border-b pb-5 border-base-300">
-        <h1 className="text-2xl font-bold font-primary text-brand-orange">Video y Amenidades</h1>
+        <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
+          <Video className="w-6 h-6 text-brand-orange animate-pulse" />
+          Video y Amenidades
+        </h1>
         <p className="text-gray-500 text-sm font-secondary mt-1">Gestiona el video promocional y las vistas de amenidades.</p>
       </div>
 

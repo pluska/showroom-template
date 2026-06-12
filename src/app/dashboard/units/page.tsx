@@ -11,7 +11,10 @@ export const metadata = {
 
 export default async function UnitsPage() {
   const session = await auth();
-  const userRole = session?.user?.role || "SUPER_ADMIN";
+  if (!session || !session.user) {
+    redirect("/login");
+  }
+  const userRole = session.user.role || "SELLER";
   const isSuperAdmin = userRole === "SUPER_ADMIN";
 
   // Fetch initial data on the server
@@ -45,6 +48,7 @@ export default async function UnitsPage() {
     photosUnfurnished: (u.photosUnfurnished as string[]) || [],
     photosPlans: (u.photosPlans as string[]) || [],
     photosBalcony: (u.photosBalcony as string[]) || [],
+    gallery: (u.gallery as string[]) || [],
   }));
 
   const filteredUnits = serializedUnits.filter((u) => {
@@ -55,9 +59,9 @@ export default async function UnitsPage() {
   });
 
   const currentUser = {
-    id: session?.user?.id || "mock-id",
-    name: session?.user?.name || "andresadmin",
-    email: session?.user?.email || "andresadmin@example.com",
+    id: session.user.id || "",
+    name: session.user.name || "",
+    email: session.user.email || "",
     role: userRole,
   };
 

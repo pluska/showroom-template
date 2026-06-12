@@ -273,7 +273,10 @@ export default function GalleriesDashboard({ initialCollections }: GalleriesDash
       {/* Header */}
       <div className="border-b pb-5 border-base-300 flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold font-primary text-brand-orange">Galerías de Fotos</h1>
+          <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
+            <ImageIcon className="w-6 h-6 text-brand-orange animate-pulse" />
+            Galerías de Fotos
+          </h1>
           <p className="text-gray-500 text-sm mt-1">Gestiona las diferentes categorías y fotos dinámicas del showroom.</p>
         </div>
         {!selectedCollection && (

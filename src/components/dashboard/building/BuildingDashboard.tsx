@@ -355,7 +355,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
         <div className="flex justify-between items-center bg-base-100 p-6 rounded-2xl shadow-sm border border-base-300/50">
           <div>
             <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
-              <Building className="w-6 h-6" />
+              <Building className="w-6 h-6 text-brand-orange animate-pulse" />
               Estructura del Edificio
             </h1>
             <p className="text-base-content/70 text-xs mt-1 font-secondary">

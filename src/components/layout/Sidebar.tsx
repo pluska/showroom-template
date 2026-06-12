@@ -79,7 +79,7 @@ const Sidebar = ({ isOpen = false, onClose = () => { }, role }: SidebarProps) =>
         }
     }, [isOpen, buildingFacesData, floorsData]);
 
-    const menuItems = activeFeatures.filter(item => item.active);
+    const menuItems = activeFeatures.filter(item => item.active && item.id !== "identity");
 
     const toggleBrochure = useStore(state => state.toggleBrochure);
 

@@ -2,17 +2,10 @@
 
 import { getDb } from "@/lib/db";
 import { users, appointments } from "@/lib/db/schema";
-const auth = async () => ({
-  user: {
-    id: "mock-id",
-    name: "andresadmin",
-    email: "andresadmin@example.com",
-    role: "SUPER_ADMIN",
-  }
-});
 import bcrypt from "bcryptjs";
 import { eq, isNull, and, gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
 
 export async function getUsers() {
   const session = await auth();
@@ -53,19 +46,22 @@ export async function createUser(data: any) {
     
     const createdUsersArr = await db.select().from(users).where(and(eq(users.createdBy, session.user.id), isNull(users.deletedAt)));
     
-    if (adminUser.adminLimit !== null && createdUsersArr.length >= (adminUser.adminLimit || 0)) {
-      throw new Error("Has alcanzado el límite de usuarios que puedes crear.");
+    if (adminUser && adminUser.adminLimit !== null && adminUser.adminLimit > 0) {
+      if (createdUsersArr.length >= adminUser.adminLimit) {
+        throw new Error(`Has alcanzado el límite de usuarios que puedes crear (${adminUser.adminLimit}).`);
+      }
     }
   }
 
-  const hashedPassword = await bcrypt.hash(data.password, 10);
+  const limitValue = data.role === "ADMIN" ? (data.adminLimit ?? 5) : (data.adminLimit || 0);
+  const hashedPassword = bcrypt.hashSync(data.password, 10);
 
   await db.insert(users).values({
     name: data.name,
     email: data.email,
     password: hashedPassword,
     role: data.role,
-    adminLimit: data.adminLimit || 0,
+    adminLimit: limitValue,
     createdBy: session.user.id,
   });
 
@@ -129,7 +125,7 @@ export async function updateUser(id: string, data: any) {
   }
 
   if (data.password) {
-    updateData.password = await bcrypt.hash(data.password, 10);
+    updateData.password = bcrypt.hashSync(data.password, 10);
   }
 
   await db.update(users).set(updateData).where(eq(users.id, id));

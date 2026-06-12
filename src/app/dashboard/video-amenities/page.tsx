@@ -1,7 +1,13 @@
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
 import { getMedia } from "@/app/actions/media";
 import VideoAmenitiesDashboard from "@/components/dashboard/video-amenities/VideoAmenitiesDashboard";
 
 export default async function VideoAmenitiesPage() {
+  const session = await auth();
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    redirect("/dashboard");
+  }
   const mediaList = await getMedia();
 
   // Filter only categories related to video and amenities

@@ -4,25 +4,8 @@ import { getDb } from "@/lib/db";
 import { locationsPoi } from "@/lib/db/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { auth as nextAuth } from "@/auth";
+import { auth } from "@/auth";
 import initialLocations from "@/data/santa_fe_locations.json";
-
-const auth = async () => {
-  try {
-    const session = await nextAuth();
-    if (session) return session;
-  } catch (e) {
-    // Ignore next-auth error in some local runtime environments
-  }
-  return {
-    user: {
-      id: "mock-id",
-      name: "andresadmin",
-      email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
-    }
-  };
-};
 
 export async function getLocations(includeInactive = false) {
   const db = getDb();
@@ -46,8 +29,8 @@ export async function createLocation(
   isActive = true
 ) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden agregar ubicaciones.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede agregar ubicaciones.");
   }
   
   const db = getDb();
@@ -79,8 +62,8 @@ export async function updateLocation(
   isActive: boolean
 ) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden actualizar ubicaciones.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede actualizar ubicaciones.");
   }
   
   const db = getDb();
@@ -105,8 +88,8 @@ export async function updateLocation(
 
 export async function deleteLocation(id: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden eliminar ubicaciones.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede eliminar ubicaciones.");
   }
   
   const db = getDb();

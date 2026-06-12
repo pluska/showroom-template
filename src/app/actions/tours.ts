@@ -5,24 +5,7 @@ import { getDb } from "@/lib/db";
 import { tours, units, floors } from "@/lib/db/schema";
 import { eq, and, isNull, desc, ne, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { auth as nextAuth } from "@/auth";
-
-const auth = async () => {
-  try {
-    const session = await nextAuth();
-    if (session) return session;
-  } catch (e) {
-    // Ignore next-auth error in some local runtime environments
-  }
-  return {
-    user: {
-      id: "mock-id",
-      name: "andresadmin",
-      email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
-    }
-  };
-};
+import { auth } from "@/auth";
 
 export async function getToursAdmin() {
   const db = getDb();
@@ -76,8 +59,8 @@ export async function getToursPublic() {
 
 export async function uploadTour(formData: FormData) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden crear recorridos.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede crear recorridos.");
   }
 
   const file = formData.get("file") as File | null;
@@ -174,8 +157,8 @@ export async function uploadTour(formData: FormData) {
 
 export async function updateTour(id: string, formData: FormData) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden editar recorridos.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede editar recorridos.");
   }
 
   const file = formData.get("file") as File | null;
@@ -287,8 +270,8 @@ export async function updateTour(id: string, formData: FormData) {
 
 export async function toggleTourActive(id: string, active: boolean) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden alternar el estado.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede alternar el estado.");
   }
 
   const db = getDb();
@@ -306,8 +289,8 @@ export async function toggleTourActive(id: string, active: boolean) {
 
 export async function deleteTour(id: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden eliminar recorridos.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede eliminar recorridos.");
   }
 
   const db = getDb();

@@ -4,24 +4,7 @@ import { getDb } from "@/lib/db";
 import { galleryCollections, media } from "@/lib/db/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { auth as nextAuth } from "@/auth";
-
-const auth = async () => {
-  try {
-    const session = await nextAuth();
-    if (session) return session;
-  } catch (e) {
-    // Ignore next-auth error in some local runtime environments
-  }
-  return {
-    user: {
-      id: "mock-id",
-      name: "andresadmin",
-      email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
-    }
-  };
-};
+import { auth } from "@/auth";
 
 export async function getGalleryCollections() {
   const db = getDb();
@@ -54,8 +37,8 @@ export async function getGalleryImages(collectionId: string) {
 
 export async function createGalleryCollection(title: string, description: string, coverImage: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden crear colecciones.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede crear colecciones.");
   }
   
   const db = getDb();
@@ -85,8 +68,8 @@ export async function updateGalleryCollection(
   isActive: boolean
 ) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden actualizar colecciones.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede actualizar colecciones.");
   }
   
   const db = getDb();
@@ -110,8 +93,8 @@ export async function updateGalleryCollection(
 
 export async function deleteGalleryCollection(id: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden eliminar colecciones.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede eliminar colecciones.");
   }
   
   const db = getDb();

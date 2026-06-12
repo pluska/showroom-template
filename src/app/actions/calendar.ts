@@ -19,26 +19,17 @@ import config from "@/config/config";
 
 // Helper to get logged-in user or mock for local development
 async function getSessionUser(db: any) {
-  let user = {
-    id: "mock-id",
-    name: "andresadmin",
-    email: "andresadmin@example.com",
-    role: "SUPER_ADMIN",
-  };
-
-  try {
-    const session = await nextAuth();
-    if (session?.user) {
-      user = {
-        id: session.user.id || "mock-id",
-        name: session.user.name || "Dev User",
-        email: session.user.email || "dev@example.com",
-        role: session.user.role || "SUPER_ADMIN",
-      };
-    }
-  } catch (error) {
-    // Ignore runtime issues in local tests
+  const session = await nextAuth();
+  if (!session || !session.user) {
+    throw new Error("Unauthorized");
   }
+
+  const user = {
+    id: session.user.id || "",
+    name: session.user.name || "Dev User",
+    email: session.user.email || "",
+    role: session.user.role || "SELLER",
+  };
 
   // Ensure user exists in D1 database to prevent foreign key errors
   try {
@@ -124,9 +115,10 @@ export async function getProspects() {
 
 export async function getSellers() {
   const db = getDb();
-  await getSessionUser(db);
+  const currentUser = await getSessionUser(db);
+  
   // Get all users who are sellers or admins (excluding soft-deleted)
-  return await db
+  let query = db
     .select({
       id: users.id,
       name: users.name,
@@ -134,8 +126,22 @@ export async function getSellers() {
       role: users.role,
     })
     .from(users)
-    .where(isNull(users.deletedAt))
-    .orderBy(users.name);
+    .where(isNull(users.deletedAt));
+
+  // If currentUser is ADMIN, they should not see SUPER_ADMIN in the seller list
+  if (currentUser.role === "ADMIN") {
+    query = db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+      })
+      .from(users)
+      .where(and(isNull(users.deletedAt), ne(users.role, "SUPER_ADMIN")));
+  }
+
+  return await query.orderBy(users.name);
 }
 
 // ----------------------------------------------------
@@ -209,8 +215,13 @@ export async function getAppointments(sellerId?: string) {
 
   const isUserAdmin = currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
 
+  // Fetch all users to create a map of roles to filter out SUPER_ADMIN appointments for ADMIN users
+  const allUsers = await db.select({ id: users.id, role: users.role }).from(users);
+  const userRolesMap = new Map<string, string>();
+  allUsers.forEach((u) => userRolesMap.set(u.id, u.role || "SELLER"));
+
   // Map and filter results
-  const mapped = rows.map(({ appointment, prospect }) => {
+  let mapped = rows.map(({ appointment, prospect }) => {
     const pUnits = prospect ? (unitsMap.get(prospect.id) || []) : [];
     const effectiveSellerId = resolveEffectiveSeller(appointment.sellerId, appointment.date);
     
@@ -221,6 +232,13 @@ export async function getAppointments(sellerId?: string) {
       isTransferred: effectiveSellerId !== appointment.sellerId,
     };
   });
+
+  // If currentUser is ADMIN, filter out any appointments where either the original or effective seller is SUPER_ADMIN
+  if (currentUser.role === "ADMIN") {
+    mapped = mapped.filter(
+      (a) => userRolesMap.get(a.sellerId) !== "SUPER_ADMIN" && userRolesMap.get(a.effectiveSellerId) !== "SUPER_ADMIN"
+    );
+  }
 
   if (isUserAdmin) {
     if (resolvedSellerId && resolvedSellerId !== "ALL") {
@@ -516,7 +534,19 @@ export async function updateAppointmentNotes(id: string, notes: string) {
 export async function getAvailabilities(userId?: string) {
   const db = getDb();
   const currentUser = await getSessionUser(db);
-  const resolvedUserId = userId ? await resolveUserId(db, userId) : currentUser.id;
+  
+  let resolvedUserId = userId ? await resolveUserId(db, userId) : currentUser.id;
+  if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
+    resolvedUserId = currentUser.id; // Force self-view for sellers
+  }
+
+  // Admin cannot see Super Admin availabilities
+  if (currentUser.role === "ADMIN") {
+    const targetUserArr = await db.select().from(users).where(eq(users.id, resolvedUserId));
+    if (targetUserArr[0] && targetUserArr[0].role === "SUPER_ADMIN") {
+      throw new Error("Unauthorized");
+    }
+  }
 
   return await db
     .select()
@@ -539,6 +569,14 @@ export async function saveAvailabilities(userId: string, slotsData: {
   // Authorization check
   if (currentUser.id !== resolvedUserId && currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
     throw new Error("No tienes permisos para modificar la disponibilidad de este usuario.");
+  }
+
+  // Admin cannot modify Super Admin availabilities
+  if (currentUser.role === "ADMIN") {
+    const targetUserArr = await db.select().from(users).where(eq(users.id, resolvedUserId));
+    if (targetUserArr[0] && targetUserArr[0].role === "SUPER_ADMIN") {
+      throw new Error("Unauthorized");
+    }
   }
 
   // Remove existing availabilities
@@ -580,6 +618,15 @@ export async function transferCalendar(data: {
   }
   const fromSellerIdResolved = await resolveUserId(db, data.fromSellerId);
   const toSellerIdResolved = await resolveUserId(db, data.toSellerId);
+
+  // Admin cannot transfer calendar to/from Super Admin
+  if (currentUser.role === "ADMIN") {
+    const fromUserArr = await db.select().from(users).where(eq(users.id, fromSellerIdResolved));
+    const toUserArr = await db.select().from(users).where(eq(users.id, toSellerIdResolved));
+    if ((fromUserArr[0] && fromUserArr[0].role === "SUPER_ADMIN") || (toUserArr[0] && toUserArr[0].role === "SUPER_ADMIN")) {
+      throw new Error("Unauthorized");
+    }
+  }
   const start = new Date(data.startDate);
   const end = new Date(data.endDate);
 
@@ -614,16 +661,26 @@ export async function transferCalendar(data: {
 
 export async function getTransfers() {
   const db = getDb();
+  const currentUser = await getSessionUser(db);
+  if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
+    throw new Error("Unauthorized: Solo los administradores pueden ver los traspasos.");
+  }
   
   // Drizzle self-joins for user names
   const fromUsers = await db.select().from(users);
   const userMap = new Map<string, string>();
   fromUsers.forEach((u) => userMap.set(u.id, u.name));
 
-  const list = await db
+  let list = await db
     .select()
     .from(calendarTransfers)
     .orderBy(calendarTransfers.startDate);
+
+  // If Admin, filter out transfers involving Super Admin
+  if (currentUser.role === "ADMIN") {
+    const superAdminIds = new Set(fromUsers.filter(u => u.role === "SUPER_ADMIN").map(u => u.id));
+    list = list.filter(t => !superAdminIds.has(t.fromSellerId) && !superAdminIds.has(t.toSellerId));
+  }
 
   return list.map((t) => ({
     ...t,

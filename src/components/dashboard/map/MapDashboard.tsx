@@ -258,7 +258,10 @@ export default function MapDashboard({ initialLocations }: MapDashboardProps) {
       {/* Header */}
       <div className="border-b pb-5 border-base-300 flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold font-primary text-brand-orange">Mapa Interactivo</h1>
+          <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
+            <MapPin className="w-6 h-6 text-brand-orange animate-pulse" />
+            Mapa Interactivo
+          </h1>
           <p className="text-gray-500 text-sm mt-1">Gestiona los puntos de interés cercanos y categorías que se muestran en el mapa.</p>
         </div>
         <button 

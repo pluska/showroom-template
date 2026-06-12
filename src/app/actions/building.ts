@@ -5,25 +5,8 @@ import { getDb } from "@/lib/db";
 import { buildingFaces } from "@/lib/db/schema";
 import { eq, isNull, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { auth as nextAuth } from "@/auth";
+import { auth } from "@/auth";
 import { getAssetUrl } from "@/utils/assets";
-
-const auth = async () => {
-  try {
-    const session = await nextAuth();
-    if (session) return session;
-  } catch (e) {
-    // Ignore next-auth error in some local runtime environments
-  }
-  return {
-    user: {
-      id: "mock-id",
-      name: "andresadmin",
-      email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
-    }
-  };
-};
 
 export interface BuildingFace {
   id: number;

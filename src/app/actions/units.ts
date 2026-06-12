@@ -2,17 +2,9 @@
 
 import { getDb } from "@/lib/db";
 import { floors, units, logs } from "@/lib/db/schema";
-const auth = async () => ({
-  user: {
-    id: "mock-id",
-    name: "andresadmin",
-    email: "andresadmin@example.com",
-    role: "SUPER_ADMIN",
-  }
-});
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { auth as nextAuth } from "@/auth";
+import { auth } from "@/auth";
 
 // Helper to audit actions
 async function logAction(
@@ -49,7 +41,7 @@ export async function getFloors() {
 export async function getFloorsData() {
   let isSuperAdmin = false;
   try {
-    const session = await nextAuth();
+    const session = await auth();
     isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
   } catch (e) {
     // Ignore runtime/environment issues during local dev/tests

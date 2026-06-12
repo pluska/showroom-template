@@ -1,8 +1,8 @@
 import { auth } from "@/auth";
-import { Users, Building, Eye, FileText } from "lucide-react";
+import { Users, Building, Eye, FileText, LayoutDashboard } from "lucide-react";
 
 export const metadata = {
-  title: "Dashboard - Altamira",
+  title: "Dashboard - Santa Fe 170",
 };
 
 export default async function DashboardPage() {
@@ -19,7 +19,10 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold font-primary text-brand-orange">Resumen de Actividad</h1>
+        <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
+          <LayoutDashboard className="w-6 h-6 text-brand-orange animate-pulse" />
+          Resumen de Actividad
+        </h1>
         <p className="text-gray-500 text-sm font-secondary">Bienvenido de nuevo, {session?.user?.name}. Aquí tienes un vistazo general.</p>
       </div>
 

@@ -59,6 +59,7 @@ interface Unit {
   photosUnfurnished: string[];
   photosPlans: string[];
   photosBalcony: string[];
+  gallery: string[];
 }
 
 interface User {
@@ -145,7 +146,7 @@ export default function UnitsDashboard({
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<
-    "furnished" | "unfurnished" | "plans" | "balcony" | "brochure"
+    "furnished" | "unfurnished" | "plans" | "balcony" | "gallery" | "brochure"
   >("furnished");
   const [unitBrochureUrl, setUnitBrochureUrl] = useState<string | null>(null);
   const [loadingBrochure, setLoadingBrochure] = useState(false);
@@ -469,7 +470,17 @@ export default function UnitsDashboard({
 
   const openDetailsModal = (unit: Unit) => {
     setSelectedUnit(unit);
-    setActiveDetailTab("furnished");
+    // For non-SuperAdmin roles, auto-select the first tab that has content
+    if (!isSuperAdmin) {
+      if (unit.photosFurnished.length > 0) setActiveDetailTab("furnished");
+      else if (unit.photosUnfurnished.length > 0) setActiveDetailTab("unfurnished");
+      else if (unit.photosPlans.length > 0) setActiveDetailTab("plans");
+      else if (unit.photosBalcony.length > 0) setActiveDetailTab("balcony");
+      else if (unit.gallery.length > 0) setActiveDetailTab("gallery");
+      else setActiveDetailTab("brochure");
+    } else {
+      setActiveDetailTab("furnished");
+    }
     setIsDetailsModalOpen(true);
   };
 
@@ -509,7 +520,8 @@ export default function UnitsDashboard({
       {/* Header controls */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-base-100/70 dark:bg-base-100/70 backdrop-blur-md p-4 rounded-xl shadow-sm border border-base-200 dark:border-base-300 dark:border-base-200">
         <div>
-          <h1 className="text-2xl font-bold font-primary text-brand-orange">
+          <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
+            <Building className="w-6 h-6 text-brand-orange animate-pulse" />
             Módulo de Unidades y Plantas
           </h1>
           <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm font-secondary">
@@ -1384,30 +1396,46 @@ export default function UnitsDashboard({
 
             {/* Media Tabs Header */}
             <div className="tabs tabs-bordered w-full mb-4">
-              <button
-                onClick={() => setActiveDetailTab("furnished")}
-                className={`tab ${activeDetailTab === "furnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-              >
-                Amoblado
-              </button>
-              <button
-                onClick={() => setActiveDetailTab("unfurnished")}
-                className={`tab ${activeDetailTab === "unfurnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-              >
-                Sin Amoblar
-              </button>
-              <button
-                onClick={() => setActiveDetailTab("plans")}
-                className={`tab ${activeDetailTab === "plans" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-              >
-                Planos / Medidas
-              </button>
-              <button
-                onClick={() => setActiveDetailTab("balcony")}
-                className={`tab ${activeDetailTab === "balcony" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-              >
-                Vista Balcón
-              </button>
+              {(isSuperAdmin || selectedUnit.photosFurnished.length > 0) && (
+                <button
+                  onClick={() => setActiveDetailTab("furnished")}
+                  className={`tab ${activeDetailTab === "furnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                >
+                  Amoblado
+                </button>
+              )}
+              {(isSuperAdmin || selectedUnit.photosUnfurnished.length > 0) && (
+                <button
+                  onClick={() => setActiveDetailTab("unfurnished")}
+                  className={`tab ${activeDetailTab === "unfurnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                >
+                  Sin Amoblar
+                </button>
+              )}
+              {(isSuperAdmin || selectedUnit.photosPlans.length > 0) && (
+                <button
+                  onClick={() => setActiveDetailTab("plans")}
+                  className={`tab ${activeDetailTab === "plans" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                >
+                  Planos / Medidas
+                </button>
+              )}
+              {(isSuperAdmin || selectedUnit.photosBalcony.length > 0) && (
+                <button
+                  onClick={() => setActiveDetailTab("balcony")}
+                  className={`tab ${activeDetailTab === "balcony" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                >
+                  Vista Balcón
+                </button>
+              )}
+              {(isSuperAdmin || selectedUnit.gallery.length > 0) && (
+                <button
+                  onClick={() => setActiveDetailTab("gallery")}
+                  className={`tab ${activeDetailTab === "gallery" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                >
+                  Galería
+                </button>
+              )}
               <button
                 onClick={() => setActiveDetailTab("brochure")}
                 className={`tab ${activeDetailTab === "brochure" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
@@ -1479,6 +1507,23 @@ export default function UnitsDashboard({
                       {selectedUnit.photosBalcony.map((url, idx) => (
                         <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
                           <img src={url} alt={`Balcón ${idx + 1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab: Gallery */}
+              {activeDetailTab === "gallery" && (
+                <div className="w-full">
+                  {selectedUnit.gallery.length === 0 ? (
+                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay imágenes de galería disponibles.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {selectedUnit.gallery.map((url, idx) => (
+                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
+                          <img src={url} alt={`Galería ${idx + 1}`} className="w-full h-full object-cover" />
                         </div>
                       ))}
                     </div>

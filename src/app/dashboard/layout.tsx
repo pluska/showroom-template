@@ -10,25 +10,21 @@ export default async function DashboardLayout({
 }) {
   const session = await auth();
 
-  // TEMPORARY: Disable auth check for UI development
-  /*
-  if (!session) {
+  if (!session || !session.user) {
     redirect("/login");
   }
-  */
 
-  // Use real session if available, otherwise mock it
-  const mockUser = {
-    name: session?.user?.name || "Dev User",
-    email: session?.user?.email || "dev@example.com",
-    role: (session?.user?.role as string) || "SUPER_ADMIN",
+  const currentUser = {
+    name: session.user.name || "Usuario",
+    email: session.user.email || "",
+    role: (session.user.role as string) || "SELLER",
   };
 
   return (
     <div className="flex h-screen bg-base-200">
-      <Sidebar role={mockUser.role} />
+      <Sidebar role={currentUser.role} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar user={mockUser} />
+        <Topbar user={currentUser} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-base-200 p-6">
           {children}
         </main>

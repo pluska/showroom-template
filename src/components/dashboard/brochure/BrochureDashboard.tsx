@@ -18,9 +18,11 @@ type Brochure = {
 interface BrochureDashboardProps {
   initialBrochures: Brochure[];
   floorsData: Floor[];
+  currentUserRole?: string;
 }
 
-export default function BrochureDashboard({ initialBrochures, floorsData }: BrochureDashboardProps) {
+export default function BrochureDashboard({ initialBrochures, floorsData, currentUserRole = "SELLER" }: BrochureDashboardProps) {
+  const isSeller = currentUserRole === "SELLER";
   const [brochures, setBrochures] = useState<Brochure[]>(initialBrochures);
   const [isPending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
@@ -199,11 +201,12 @@ export default function BrochureDashboard({ initialBrochures, floorsData }: Broc
         </div>
       </div>
 
-      <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 dark:border-base-300 p-6 md:p-8">
-        <h2 className="text-xl font-bold font-primary mb-6 flex items-center gap-2 text-brand-orange">
-          <Upload className="w-5 h-5 text-brand-orange" /> Subir Nuevo Brochure
-        </h2>
-        <form onSubmit={handleUpload} className="flex flex-col gap-4 max-w-2xl">
+      {!isSeller && (
+        <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 dark:border-base-300 p-6 md:p-8">
+          <h2 className="text-xl font-bold font-primary mb-6 flex items-center gap-2 text-brand-orange">
+            <Upload className="w-5 h-5 text-brand-orange" /> Subir Nuevo Brochure
+          </h2>
+          <form onSubmit={handleUpload} className="flex flex-col gap-4 max-w-2xl">
           
           {/* Tipo de Brochure */}
           <div className="form-control w-full">
@@ -303,8 +306,9 @@ export default function BrochureDashboard({ initialBrochures, floorsData }: Broc
               {uploading ? "Subiendo..." : "Subir Brochure"}
             </button>
           </div>
-        </form>
-      </div>
+          </form>
+        </div>
+      )}
 
       <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 dark:border-base-300 p-6 md:p-8">
         <h2 className="text-xl font-bold font-primary mb-6 flex items-center gap-2 text-brand-orange">
@@ -328,7 +332,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData }: Broc
                     <th>Tipo</th>
                     <th>Fecha de Subida</th>
                     <th className="text-center">Estado</th>
-                    <th className="text-right">Acciones</th>
+                    {!isSeller && <th className="text-right">Acciones</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -358,6 +362,8 @@ export default function BrochureDashboard({ initialBrochures, floorsData }: Broc
                           <span className="badge badge-success gap-1 text-white py-3 px-3 text-xs font-bold uppercase tracking-wider">
                             <CheckCircle className="w-3.5 h-3.5" /> Activo
                           </span>
+                        ) : isSeller ? (
+                          <span className="badge badge-ghost text-xs">Inactivo</span>
                         ) : (
                           <button
                             onClick={() => handleSetActive(brochure.id)}
@@ -368,26 +374,28 @@ export default function BrochureDashboard({ initialBrochures, floorsData }: Broc
                           </button>
                         )}
                       </td>
-                      <td className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleEditClick(brochure)}
-                            disabled={isPending}
-                            className="btn btn-ghost btn-xs text-blue-500 hover:text-blue-700"
-                            title="Editar brochure"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(brochure.id)}
-                            disabled={isPending}
-                            className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 hover:text-error"
-                            title="Eliminar brochure"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
+                      {!isSeller && (
+                        <td className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleEditClick(brochure)}
+                              disabled={isPending}
+                              className="btn btn-ghost btn-xs text-blue-500 hover:text-blue-700"
+                              title="Editar brochure"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(brochure.id)}
+                              disabled={isPending}
+                              className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 hover:text-error"
+                              title="Eliminar brochure"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

@@ -22,7 +22,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user || user.deletedAt) return null;
 
-        const passwordsMatch = await bcrypt.compare(credentials.password as string, user.password);
+        const passwordsMatch = bcrypt.compareSync(credentials.password as string, user.password);
         
         if (passwordsMatch) {
           return {

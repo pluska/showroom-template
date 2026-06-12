@@ -6,13 +6,11 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // TEMPORARY: Disable dashboard protection for UI development
-  /*
   if (pathname.startsWith('/dashboard')) {
     if (!isLoggedIn) {
       return NextResponse.redirect(new URL('/login', req.nextUrl));
     }
   }
-  */
 
   // If logged in and trying to access login page, redirect to dashboard
   if (pathname === '/login' && isLoggedIn) {

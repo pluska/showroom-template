@@ -8,14 +8,19 @@ export const metadata = {
   title: "Gestión de Avances de Obra - Dashboard",
 };
 
+import { redirect } from "next/navigation";
+
 export default async function ProgressPage() {
   const session = await auth();
+  if (!session || !session.user) {
+    redirect("/login");
+  }
   
   const currentUser = {
-    id: session?.user?.id || "mock-id",
-    name: session?.user?.name || "Dev User",
-    email: session?.user?.email || "dev@example.com",
-    role: (session?.user?.role as string) || "SUPER_ADMIN",
+    id: session.user.id || "",
+    name: session.user.name || "",
+    email: session.user.email || "",
+    role: (session.user.role as string) || "SELLER",
   };
 
   const updates = await getProgressUpdates();

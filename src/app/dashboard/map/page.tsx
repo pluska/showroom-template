@@ -1,9 +1,15 @@
 import { getLocations, seedLocations } from "@/app/actions/locations";
 import MapDashboard from "@/components/dashboard/map/MapDashboard";
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
 
 export const runtime = "edge";
 
 export default async function MapPage() {
+  const session = await auth();
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    redirect("/dashboard");
+  }
   // Ensure default locations are seeded
   await seedLocations();
   

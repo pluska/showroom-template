@@ -16,9 +16,12 @@ type MediaItem = {
 
 interface MediaDashboardProps {
   initialMedia: MediaItem[];
+  currentUserRole?: string;
+  isIdentityEnabled?: boolean;
 }
 
 const CATEGORY_MAP: Record<string, string> = {
+  "VIDEO_PORTADA": "Vídeo Portada",
   "VIDEO_SIDEBAR": "Vídeo Principal",
   "AMENITIES_GALLERY": "Amenidades",
   "RECORRIDOS": "Recorridos",
@@ -31,7 +34,8 @@ const CATEGORY_MAP: Record<string, string> = {
   "EXTRA": "Extras"
 };
 
-export default function MediaDashboard({ initialMedia }: MediaDashboardProps) {
+export default function MediaDashboard({ initialMedia, currentUserRole = "SELLER", isIdentityEnabled = false }: MediaDashboardProps) {
+  const isSuperAdmin = currentUserRole === "SUPER_ADMIN";
   const [mediaList, setMediaList] = useState<MediaItem[]>(initialMedia);
   const modalRef = useRef<HTMLDialogElement>(null);
 
@@ -40,7 +44,16 @@ export default function MediaDashboard({ initialMedia }: MediaDashboardProps) {
   
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [uploadCategory, setUploadCategory] = useState("VIDEO_SIDEBAR");
+  
+  const activeCategories: Record<string, string> = {
+    "VIDEO_PORTADA": "Vídeo Portada",
+    "VIDEO_SIDEBAR": "Vídeo Principal",
+    "AMENITIES_GALLERY": "Amenidades",
+    "EL_EDIFICIO": "El edificio",
+    ...(isIdentityEnabled ? { "IDENTIDAD": "Identidad" } : {})
+  };
+
+  const [uploadCategory, setUploadCategory] = useState("VIDEO_PORTADA");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("TODOS");
@@ -135,20 +148,22 @@ export default function MediaDashboard({ initialMedia }: MediaDashboardProps) {
       <div className="border-b pb-5 border-base-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
-            <ImageIcon className="w-6 h-6 text-brand-orange" />
+            <ImageIcon className="w-6 h-6 text-brand-orange animate-pulse" />
             Multimedia General
           </h1>
           <p className="text-gray-500 text-sm font-secondary mt-1">
             Gestiona los archivos multimedia y recursos del proyecto.
           </p>
         </div>
-        <button
-          onClick={openModal}
-          className="btn bg-brand-orange hover:bg-brand-dark-orange text-white border-0 flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Agregar Recurso
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={openModal}
+            className="btn bg-brand-orange hover:bg-brand-dark-orange text-white border-0 flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar Recurso
+          </button>
+        )}
       </div>
 
       {/* Album Grid by Category */}
@@ -157,9 +172,11 @@ export default function MediaDashboard({ initialMedia }: MediaDashboardProps) {
           <div className="flex flex-col items-center justify-center bg-base-100 rounded-xl shadow-sm border border-base-200 min-h-[400px] text-gray-400 py-12">
             <ImageIcon className="w-16 h-16 mb-4 opacity-20" />
             <p className="text-sm">No hay archivos registrados.</p>
-            <button onClick={openModal} className="btn btn-outline btn-sm mt-4">
-              Subir tu primer archivo
-            </button>
+            {isSuperAdmin && (
+              <button onClick={openModal} className="btn btn-outline btn-sm mt-4">
+                Subir tu primer archivo
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-12">
@@ -181,13 +198,13 @@ export default function MediaDashboard({ initialMedia }: MediaDashboardProps) {
                 onChange={(e) => setSelectedCategoryFilter(e.target.value)}
               >
                 <option value="TODOS">Todas las Categorías</option>
-                {Object.entries(CATEGORY_MAP).map(([key, label]) => (
+                {Object.entries(activeCategories).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
                 ))}
               </select>
             </div>
 
-            {Object.entries(CATEGORY_MAP).map(([catKey, catLabel]) => {
+            {Object.entries(activeCategories).map(([catKey, catLabel]) => {
               if (selectedCategoryFilter !== "TODOS" && selectedCategoryFilter !== catKey) return null;
 
               // Group items that match the key (or mapped label for items that already have it)
@@ -201,8 +218,13 @@ export default function MediaDashboard({ initialMedia }: MediaDashboardProps) {
 
               return (
                 <div key={catKey} className="flex flex-col gap-4">
-                  <h2 className="text-xl font-bold font-primary text-gray-800 border-b border-base-200 pb-2">
-                    {catLabel.toUpperCase()}
+                  <h2 className="text-xl font-bold font-primary text-gray-800 border-b border-base-200 pb-2 flex flex-col gap-1">
+                    <span>{catLabel.toUpperCase()}</span>
+                    {catKey === "EL_EDIFICIO" && (
+                      <span className="text-xs font-normal text-gray-400 font-secondary lowercase first-letter:uppercase">
+                        Corresponde a las imágenes de los pisos y departamentos (amoblados, sin amoblar, medidas, galería, balcón).
+                      </span>
+                    )}
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {categoryMedia.map((mediaItem) => {
@@ -301,10 +323,15 @@ export default function MediaDashboard({ initialMedia }: MediaDashboardProps) {
                 value={uploadCategory}
                 onChange={(e) => setUploadCategory(e.target.value)}
               >
-                {Object.entries(CATEGORY_MAP).map(([key, label]) => (
+                {Object.entries(activeCategories).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
                 ))}
               </select>
+              {uploadCategory === "EL_EDIFICIO" && (
+                <p className="text-xs text-gray-500 mt-1.5 font-medium leading-relaxed">
+                  Las imágenes de esta categoría corresponden a los pisos y departamentos (vistas amoblada, sin amoblar, medidas, galería, balcón).
+                </p>
+              )}
             </div>
 
             <div className="form-control w-full">

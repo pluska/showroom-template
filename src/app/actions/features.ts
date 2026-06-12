@@ -1,26 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth as nextAuth } from "@/auth";
+import { auth } from "@/auth";
 import { getSetting, updateSetting } from "@/app/actions/settings";
 import defaultFeaturesJson from "@/data/features.json";
-
-const auth = async () => {
-  try {
-    const session = await nextAuth();
-    if (session) return session;
-  } catch (e) {
-    // Ignore next-auth error in some local runtime environments
-  }
-  return {
-    user: {
-      id: "mock-id",
-      name: "andresadmin",
-      email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
-    }
-  };
-};
 
 export type SidebarFeature = {
   id: string;
@@ -45,6 +28,19 @@ export async function getFeatures(): Promise<SidebarFeature[]> {
     if (!dbFeatures || !Array.isArray(dbFeatures) || dbFeatures.length === 0) {
       await updateSetting("sidebar_features_list", defaultSidebarFeatures);
       dbFeatures = defaultSidebarFeatures;
+    } else {
+      // Ensure all default features exist in dbFeatures (such as new features added later)
+      let changed = false;
+      defaultSidebarFeatures.forEach(defaultFeat => {
+        const exists = dbFeatures.some((f: SidebarFeature) => f.id === defaultFeat.id);
+        if (!exists) {
+          dbFeatures.push(defaultFeat);
+          changed = true;
+        }
+      });
+      if (changed) {
+        await updateSetting("sidebar_features_list", dbFeatures);
+      }
     }
     
     // Si no hay video, esconde la opción en el sidebar
@@ -63,8 +59,8 @@ export async function getFeatures(): Promise<SidebarFeature[]> {
 
 export async function updateFeature(id: string, updates: Partial<SidebarFeature>) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden editar características.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede editar características.");
   }
 
   try {
@@ -87,8 +83,8 @@ export async function updateFeature(id: string, updates: Partial<SidebarFeature>
 
 export async function reorderFeatures(newOrderedFeatures: SidebarFeature[]) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden ordenar características.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede ordenar características.");
   }
 
   try {

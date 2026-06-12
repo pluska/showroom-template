@@ -4,24 +4,7 @@ import { getDb } from "@/lib/db";
 import { constructionProgress } from "@/lib/db/schema";
 import { eq, isNull, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { auth as nextAuth } from "@/auth";
-
-const auth = async () => {
-  try {
-    const session = await nextAuth();
-    if (session) return session;
-  } catch (e) {
-    // Ignore next-auth error in some local runtime environments
-  }
-  return {
-    user: {
-      id: "mock-id",
-      name: "andresadmin",
-      email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
-    }
-  };
-};
+import { auth } from "@/auth";
 
 export async function getProgressUpdates() {
   const db = getDb();

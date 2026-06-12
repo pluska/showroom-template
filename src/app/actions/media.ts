@@ -5,24 +5,7 @@ import { getDb } from "@/lib/db";
 import { media } from "@/lib/db/schema";
 import { eq, isNull, desc, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { auth as nextAuth } from "@/auth";
-
-const auth = async () => {
-  try {
-    const session = await nextAuth();
-    if (session) return session;
-  } catch (e) {
-    // Ignore next-auth error in some local runtime environments
-  }
-  return {
-    user: {
-      id: "mock-id",
-      name: "andresadmin",
-      email: "andresadmin@example.com",
-      role: "SUPER_ADMIN",
-    }
-  };
-};
+import { auth } from "@/auth";
 
 export async function getMedia(category?: string) {
   const db = getDb();
@@ -50,8 +33,8 @@ export async function getActiveMedia(category: string) {
 
 export async function uploadMedia(formData: FormData) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden subir multimedia.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede subir multimedia.");
   }
 
   const file = formData.get("file") as File;
@@ -95,9 +78,9 @@ export async function uploadMedia(formData: FormData) {
 
   const db = getDb();
   
-  // For VIDEO_SIDEBAR we only want one active. For amenities we can have multiple.
+  // For VIDEO_SIDEBAR and VIDEO_PORTADA we only want one active. For amenities we can have multiple.
   let shouldBeActive = false;
-  if (category === "VIDEO_SIDEBAR") {
+  if (category === "VIDEO_SIDEBAR" || category === "VIDEO_PORTADA") {
       const existing = await getMedia(category);
       shouldBeActive = existing.length === 0;
   } else if (category === "AMENITIES_GALLERY") {
@@ -124,18 +107,18 @@ export async function uploadMedia(formData: FormData) {
 
 export async function toggleMediaActive(id: string, active: boolean, category: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden cambiar el estado.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede cambiar el estado.");
   }
 
   const db = getDb();
 
-  // If we are activating a VIDEO_SIDEBAR, deactivate others
-  if (category === "VIDEO_SIDEBAR" && active) {
+  // If we are activating a VIDEO_SIDEBAR or VIDEO_PORTADA, deactivate others
+  if ((category === "VIDEO_SIDEBAR" || category === "VIDEO_PORTADA") && active) {
     await db
       .update(media)
       .set({ isActive: false })
-      .where(eq(media.category, "VIDEO_SIDEBAR"));
+      .where(eq(media.category, category));
   }
 
   const [updated] = await db
@@ -153,8 +136,8 @@ export async function toggleMediaActive(id: string, active: boolean, category: s
 
 export async function deleteMedia(id: string) {
   const session = await auth();
-  if (!session || (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN")) {
-    throw new Error("Unauthorized: Solo administradores pueden eliminar multimedia.");
+  if (!session || session.user.role !== "SUPER_ADMIN") {
+    throw new Error("Unauthorized: Solo el Super Administrador puede eliminar multimedia.");
   }
 
   // En un mundo real, para EXTRA content, tal vez validar si es SUPER_ADMIN, 

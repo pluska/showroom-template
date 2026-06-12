@@ -8,12 +8,10 @@ import ToursDashboard from "@/components/dashboard/tours/ToursDashboard";
 export default async function ToursPage() {
   const session = await auth();
 
-  // If session is present but user role is not authorized, redirect
-  // Note: dashboard layout allows mock fallback, but let's obtain current role
-  const role = (session?.user?.role as string) || "SUPER_ADMIN";
-  if (role !== "SUPER_ADMIN" && role !== "ADMIN") {
+  if (!session || session.user.role !== "SUPER_ADMIN") {
     redirect("/dashboard");
   }
+  const role = session.user.role as string;
 
   const [toursList, unitsList, mediaList] = await Promise.all([
     getToursAdmin(),
