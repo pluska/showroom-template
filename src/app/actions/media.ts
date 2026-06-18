@@ -1,6 +1,6 @@
 "use server";
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { media } from "@/lib/db/schema";
 import { eq, isNull, desc, and } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 
 export async function getMedia(category?: string) {
-  const db = getDb();
+  const db = await getDb();
 
   const query = db.select().from(media).where(
     category 
@@ -21,7 +21,7 @@ export async function getMedia(category?: string) {
 }
 
 export async function getActiveMedia(category: string) {
-  const db = getDb();
+  const db = await getDb();
 
   const activeMediaList = await db
     .select()
@@ -48,7 +48,7 @@ export async function uploadMedia(formData: FormData) {
 
   let uploadedToR2 = false;
   try {
-    const env = getRequestContext().env as any;
+    const { env } = await getCloudflareContext({ async: true }) as any;
     if (env && env.R2) {
       const arrayBuffer = await file.arrayBuffer();
       await env.R2.put(url, arrayBuffer, {
@@ -76,7 +76,7 @@ export async function uploadMedia(formData: FormData) {
     throw new Error("No se pudo subir a R2. Verifica tu configuración de Cloudflare Pages / bindings de R2.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   
   // For VIDEO_SIDEBAR and VIDEO_PORTADA we only want one active. For amenities we can have multiple.
   let shouldBeActive = false;
@@ -111,7 +111,7 @@ export async function toggleMediaActive(id: string, active: boolean, category: s
     throw new Error("Unauthorized: Solo el Super Administrador puede cambiar el estado.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   // If we are activating a VIDEO_SIDEBAR or VIDEO_PORTADA, deactivate others
   if ((category === "VIDEO_SIDEBAR" || category === "VIDEO_PORTADA") && active) {
@@ -143,7 +143,7 @@ export async function deleteMedia(id: string) {
   // En un mundo real, para EXTRA content, tal vez validar si es SUPER_ADMIN, 
   // pero mantendremos la lógica simple de que cualquier admin puede borrar (o ajustar según requieras).
 
-  const db = getDb();
+  const db = await getDb();
   await db
     .update(media)
     .set({ deletedAt: new Date(), isActive: false })

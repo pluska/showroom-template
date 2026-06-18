@@ -18,7 +18,7 @@ const UnitCard = ({
     unit.status === 'available' ? 'bg-green-500' : 
     unit.status === 'reserved' ? 'bg-amber-500' : 'bg-red-500';
 
-  const isStorage = unit.type === 'storage' || (!unit.bedrooms && !unit.bathrooms);
+  const isStorage = unit.type === 'storage' || (unit.type !== 'apartment' && !unit.bedrooms && !unit.bathrooms);
 
   return (
     <div className="bg-white overflow-hidden w-full">
@@ -32,7 +32,10 @@ const UnitCard = ({
                   </span>
               </div>
               )}
-              <h2 className="text-lg font-light text-gray-900 leading-tight">{unit.id}</h2>
+              <h2 className="text-lg font-light text-gray-900 leading-tight">{unit.identifier || unit.id}</h2>
+              {unit.subtitle && (
+                  <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider mt-0.5">{unit.subtitle}</p>
+              )}
            </div>
         </div>
         

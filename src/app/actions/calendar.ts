@@ -101,7 +101,7 @@ async function getEffectiveSellerId(db: any, sellerId: string, date: Date): Prom
 // ----------------------------------------------------
 
 export async function getProspects() {
-  const db = getDb();
+  const db = await getDb();
   return await db
     .select()
     .from(prospects)
@@ -114,7 +114,7 @@ export async function getProspects() {
 // ----------------------------------------------------
 
 export async function getSellers() {
-  const db = getDb();
+  const db = await getDb();
   const currentUser = await getSessionUser(db);
   
   // Get all users who are sellers or admins (excluding soft-deleted)
@@ -149,7 +149,7 @@ export async function getSellers() {
 // ----------------------------------------------------
 
 export async function getAppointments(sellerId?: string) {
-  const db = getDb();
+  const db = await getDb();
   const currentUser = await getSessionUser(db);
   const resolvedSellerId = sellerId ? await resolveUserId(db, sellerId) : undefined;
 
@@ -267,7 +267,7 @@ export async function createAppointment(data: {
   notes?: string;
   sendEmail: boolean;
 }) {
-  const db = getDb();
+  const db = await getDb();
   const bookingDate = new Date(data.date);
 
   // 1. Manage Prospect
@@ -502,7 +502,7 @@ export async function createAppointment(data: {
 }
 
 export async function updateAppointmentStatus(id: string, status: "SCHEDULED" | "COMPLETED" | "CANCELLED") {
-  const db = getDb();
+  const db = await getDb();
   await db
     .update(appointments)
     .set({
@@ -515,7 +515,7 @@ export async function updateAppointmentStatus(id: string, status: "SCHEDULED" | 
 }
 
 export async function updateAppointmentNotes(id: string, notes: string) {
-  const db = getDb();
+  const db = await getDb();
   await db
     .update(appointments)
     .set({
@@ -532,7 +532,7 @@ export async function updateAppointmentNotes(id: string, notes: string) {
 // ----------------------------------------------------
 
 export async function getAvailabilities(userId?: string) {
-  const db = getDb();
+  const db = await getDb();
   const currentUser = await getSessionUser(db);
   
   let resolvedUserId = userId ? await resolveUserId(db, userId) : currentUser.id;
@@ -562,7 +562,7 @@ export async function saveAvailabilities(userId: string, slotsData: {
   slotDuration: number;
   meetingType: "VIRTUAL" | "IN_PERSON" | "BOTH";
 }[]) {
-  const db = getDb();
+  const db = await getDb();
   const currentUser = await getSessionUser(db);
   const resolvedUserId = await resolveUserId(db, userId);
 
@@ -611,7 +611,7 @@ export async function transferCalendar(data: {
   endDate: Date | string;
   isDefinitive: boolean;
 }) {
-  const db = getDb();
+  const db = await getDb();
   const currentUser = await getSessionUser(db);
   if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
     throw new Error("Solo los administradores pueden realizar traspasos de calendarios.");
@@ -660,7 +660,7 @@ export async function transferCalendar(data: {
 }
 
 export async function getTransfers() {
-  const db = getDb();
+  const db = await getDb();
   const currentUser = await getSessionUser(db);
   if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
     throw new Error("Unauthorized: Solo los administradores pueden ver los traspasos.");
@@ -690,7 +690,7 @@ export async function getTransfers() {
 }
 
 export async function deleteTransfer(id: string) {
-  const db = getDb();
+  const db = await getDb();
   const currentUser = await getSessionUser(db);
   if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
     throw new Error("Solo los administradores pueden eliminar traspasos.");

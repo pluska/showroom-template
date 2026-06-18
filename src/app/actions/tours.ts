@@ -1,6 +1,6 @@
 "use server";
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { tours, units, floors } from "@/lib/db/schema";
 import { eq, and, isNull, desc, ne, asc } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 
 export async function getToursAdmin() {
-  const db = getDb();
+  const db = await getDb();
 
   return await db
     .select({
@@ -33,7 +33,7 @@ export async function getToursAdmin() {
 }
 
 export async function getToursPublic() {
-  const db = getDb();
+  const db = await getDb();
 
   return await db
     .select({
@@ -84,7 +84,7 @@ export async function uploadTour(formData: FormData) {
 
     let uploadedToR2 = false;
     try {
-      const env = getRequestContext().env as any;
+      const { env } = await getCloudflareContext({ async: true }) as any;
       if (env && env.R2) {
         const arrayBuffer = await file.arrayBuffer();
         await env.R2.put(url, arrayBuffer, {
@@ -114,7 +114,7 @@ export async function uploadTour(formData: FormData) {
     throw new Error("Debe subir una portada o seleccionar una imagen existente.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   // Si se selecciona tipo 'unit' y se asigna a una unidad
   let finalUnitId = type === "unit" ? unitId : null;
@@ -173,7 +173,7 @@ export async function updateTour(id: string, formData: FormData) {
   if (!title) throw new Error("El título es obligatorio.");
   if (!targetUrl) throw new Error("La URL del recorrido es obligatoria.");
 
-  const db = getDb();
+  const db = await getDb();
 
   // Obtener el recorrido actual
   const [currentTour] = await db
@@ -192,7 +192,7 @@ export async function updateTour(id: string, formData: FormData) {
 
     let uploadedToR2 = false;
     try {
-      const env = getRequestContext().env as any;
+      const { env } = await getCloudflareContext({ async: true }) as any;
       if (env && env.R2) {
         const arrayBuffer = await file.arrayBuffer();
         await env.R2.put(url, arrayBuffer, {
@@ -274,7 +274,7 @@ export async function toggleTourActive(id: string, active: boolean) {
     throw new Error("Unauthorized: Solo el Super Administrador puede alternar el estado.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   const [updated] = await db
     .update(tours)
@@ -293,7 +293,7 @@ export async function deleteTour(id: string) {
     throw new Error("Unauthorized: Solo el Super Administrador puede eliminar recorridos.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   // Obtener el recorrido actual
   const [tour] = await db

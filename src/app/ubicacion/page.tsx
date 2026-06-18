@@ -207,7 +207,7 @@ const DirectionsPage = () => {
 
             {/* Floating Bottom Panel (Console) */}
             <div
-                className={`fixed bottom-0 md:bottom-6 left-0 md:left-6 w-full md:w-[450px] bg-white md:rounded-2xl shadow-2xl z-20 flex flex-col transition-all duration-500 ease-in-out h-full md:h-auto md:max-h-[70%] ${isPanelOpen ? 'translate-y-0 pointer-events-auto' : 'translate-y-full md:translate-y-[calc(100%-180px)] opacity-100 pointer-events-none'}`}
+                className={`fixed bottom-0 md:bottom-6 left-0 md:left-6 w-full md:w-[450px] bg-white md:rounded-2xl shadow-2xl z-20 flex flex-col transition-all duration-500 ease-in-out h-full md:h-auto md:max-h-[70%] pointer-events-auto ${isPanelOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-[calc(100%-180px)]'}`}
             >
 
                 {/* Handler / Header Area */}
@@ -305,7 +305,7 @@ const DirectionsPage = () => {
                                     placeholder={searchMode === 'explore' ? "Buscar lugares cercanos..." : "Ingresa tu ubicación..."}
                                     value={filter}
                                     onChange={(e) => setFilter(e.target.value)}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-brand-orange transition-colors"
+                                    className="w-full bg-gray-50 text-brand-orange border border-gray-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-brand-orange transition-colors"
                                 />
                             </div>
                         </div>
@@ -313,7 +313,7 @@ const DirectionsPage = () => {
                 </div>
 
                 {/* Content (Scrollable) */}
-                <div className="flex-1 flex flex-col overflow-hidden bg-white md:rounded-b-2xl">
+                <div className={`flex-1 flex flex-col overflow-hidden bg-white md:rounded-b-2xl ${!isPanelOpen ? 'pointer-events-none' : ''}`}>
                     {searchMode === 'explore' && (
                         <div className="p-4 pb-2 space-y-3 shrink-0 bg-white border-b border-gray-100">
                             {/* Categories - Horizontal Scroll */}

@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const yearStr = searchParams.get("year"); // e.g. "2026"
     const monthStr = searchParams.get("month"); // e.g. "6" (1-12)
 
-    const db = getDb();
+    const db = await getDb();
 
     // 1. Fetch active sellers
     const activeSellers = await db

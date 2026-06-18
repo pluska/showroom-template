@@ -5,17 +5,18 @@ import { locationsPoi } from "@/lib/db/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import config from "@/config/config";
 import initialLocations from "@/data/santa_fe_locations.json";
 
 export async function getLocations(includeInactive = false) {
-  const db = getDb();
-  
+  const db = await getDb();
+
   const query = db.select().from(locationsPoi).where(
     includeInactive
       ? isNull(locationsPoi.deletedAt)
       : and(isNull(locationsPoi.deletedAt), eq(locationsPoi.isActive, true))
   );
-  
+
   const results = await query;
   return results;
 }
@@ -32,9 +33,9 @@ export async function createLocation(
   if (!session || session.user.role !== "SUPER_ADMIN") {
     throw new Error("Unauthorized: Solo el Super Administrador puede agregar ubicaciones.");
   }
-  
-  const db = getDb();
-  
+
+  const db = await getDb();
+
   const [newLocation] = await db
     .insert(locationsPoi)
     .values({
@@ -46,7 +47,7 @@ export async function createLocation(
       isActive,
     })
     .returning();
-    
+
   revalidatePath("/ubicacion");
   revalidatePath("/dashboard/map");
   return newLocation;
@@ -65,9 +66,9 @@ export async function updateLocation(
   if (!session || session.user.role !== "SUPER_ADMIN") {
     throw new Error("Unauthorized: Solo el Super Administrador puede actualizar ubicaciones.");
   }
-  
-  const db = getDb();
-  
+
+  const db = await getDb();
+
   const [updatedLocation] = await db
     .update(locationsPoi)
     .set({
@@ -80,7 +81,7 @@ export async function updateLocation(
     })
     .where(eq(locationsPoi.id, id))
     .returning();
-    
+
   revalidatePath("/ubicacion");
   revalidatePath("/dashboard/map");
   return updatedLocation;
@@ -91,46 +92,45 @@ export async function deleteLocation(id: string) {
   if (!session || session.user.role !== "SUPER_ADMIN") {
     throw new Error("Unauthorized: Solo el Super Administrador puede eliminar ubicaciones.");
   }
-  
-  const db = getDb();
-  
+
+  const db = await getDb();
+
   await db
     .update(locationsPoi)
     .set({ deletedAt: new Date(), isActive: false })
     .where(eq(locationsPoi.id, id));
-    
+
   revalidatePath("/ubicacion");
   revalidatePath("/dashboard/map");
   return { success: true };
 }
 
 export async function seedLocations() {
-  const db = getDb();
-  
+  const db = await getDb();
+
   // Check if locations already exist
   const existing = await db
     .select()
     .from(locationsPoi)
     .where(isNull(locationsPoi.deletedAt));
-    
+
   if (existing.length > 0) {
     return existing;
   }
-  
+
   const seeded: any[] = [];
-  
-  // Filter out Santa Fe project itself if present (it has its own hardcoded marker on map)
+
   const features = (initialLocations.features || []).filter(
-    (f: any) => f.properties.nombre !== "Santa Fe"
+    (f: any) => f.properties.nombre !== config.appName
   );
-  
+
   for (const feature of features) {
     const name = feature.properties.nombre;
     const category = feature.properties.categoria || "Otros";
     const imagePath = feature.properties.imagen || null;
     const longitude = feature.geometry.coordinates[0];
     const latitude = feature.geometry.coordinates[1];
-    
+
     const [row] = await db
       .insert(locationsPoi)
       .values({
@@ -143,9 +143,9 @@ export async function seedLocations() {
         isActive: true,
       })
       .returning();
-      
+
     seeded.push(row);
   }
-  
+
   return seeded;
 }

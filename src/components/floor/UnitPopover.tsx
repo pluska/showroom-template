@@ -9,6 +9,7 @@ interface UnitPopoverProps {
   onMouseLeave: () => void;
   onOpenConsultation: (e: React.MouseEvent, unitId: string) => void;
   onNavigate: (path: string) => void;
+  openDirection?: 'up' | 'down';
 }
 
 const UnitPopover = ({
@@ -18,14 +19,22 @@ const UnitPopover = ({
   onMouseEnter,
   onMouseLeave,
   onOpenConsultation,
-  onNavigate
+  onNavigate,
+  openDirection = 'up'
 }: UnitPopoverProps) => {
+  const isUp = openDirection === 'up';
+
   return (
     <div 
-        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-72 bg-white rounded-xl shadow-2xl overflow-hidden animate-fade-in-up origin-bottom cursor-auto hidden xl:block"
+        className={`absolute left-1/2 -translate-x-1/2 w-72 bg-white rounded-xl shadow-2xl overflow-hidden cursor-auto hidden xl:block z-50 animate-fade-in
+            ${isUp 
+                ? 'bottom-full mb-4 origin-bottom' 
+                : 'top-full mt-4 origin-top'
+            }
+        `}
         style={{ 
             transform: `translateX(-50%) scale(${1/scale})`, 
-            transformOrigin: 'bottom center'
+            transformOrigin: isUp ? 'bottom center' : 'top center'
         }}
         onMouseEnter={() => onMouseEnter(unit)}
         onMouseLeave={onMouseLeave}
@@ -37,7 +46,12 @@ const UnitPopover = ({
             onNavigate={onNavigate}
         />
         
-        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rotate-45 border-r border-b border-gray-100 shadow-sm z-0"></div>
+        <div className={`absolute w-3 h-3 bg-white rotate-45 shadow-sm z-0 left-1/2 -translate-x-1/2
+            ${isUp 
+                ? '-bottom-1.5 border-r border-b border-gray-100' 
+                : '-top-1.5 border-l border-t border-gray-100'
+            }
+        `}></div>
     </div>
   );
 };

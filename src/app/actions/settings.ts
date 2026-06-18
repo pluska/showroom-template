@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 
 export async function getSetting(id: string) {
-  const db = getDb();
+  const db = await getDb();
   const settingArr = await db.select().from(globalSettings).where(eq(globalSettings.id, id));
   
   if (settingArr.length === 0) {
@@ -27,7 +27,7 @@ export async function updateSetting(id: string, config: any) {
     throw new Error("Unauthorized: Only Super Admin can modify global settings");
   }
 
-  const db = getDb();
+  const db = await getDb();
   const configString = typeof config === 'string' ? config : JSON.stringify(config);
 
   const existing = await db.select().from(globalSettings).where(eq(globalSettings.id, id));

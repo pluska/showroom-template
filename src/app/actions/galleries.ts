@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 
 export async function getGalleryCollections() {
-  const db = getDb();
+  const db = await getDb();
   
   // Clean up soft-deleted collections
   const collections = await db
@@ -19,7 +19,7 @@ export async function getGalleryCollections() {
 }
 
 export async function getGalleryImages(collectionId: string) {
-  const db = getDb();
+  const db = await getDb();
   
   const images = await db
     .select()
@@ -41,7 +41,7 @@ export async function createGalleryCollection(title: string, description: string
     throw new Error("Unauthorized: Solo el Super Administrador puede crear colecciones.");
   }
   
-  const db = getDb();
+  const db = await getDb();
   
   const id = crypto.randomUUID();
   const [newCollection] = await db
@@ -72,7 +72,7 @@ export async function updateGalleryCollection(
     throw new Error("Unauthorized: Solo el Super Administrador puede actualizar colecciones.");
   }
   
-  const db = getDb();
+  const db = await getDb();
   
   const [updatedCollection] = await db
     .update(galleryCollections)
@@ -97,7 +97,7 @@ export async function deleteGalleryCollection(id: string) {
     throw new Error("Unauthorized: Solo el Super Administrador puede eliminar colecciones.");
   }
   
-  const db = getDb();
+  const db = await getDb();
   
   // Soft-delete the collection
   await db
@@ -117,7 +117,7 @@ export async function deleteGalleryCollection(id: string) {
 }
 
 export async function seedGalleryCollections() {
-  const db = getDb();
+  const db = await getDb();
   
   // Check if collections already exist
   const existing = await db

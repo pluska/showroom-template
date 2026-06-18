@@ -1,11 +1,11 @@
 import { drizzle } from 'drizzle-orm/d1';
-import { getRequestContext } from '@cloudflare/next-on-pages';
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import * as schema from './schema';
 
-export function getDb() {
-  const env = getRequestContext().env as any;
-  if (!env || !env.DB) {
-    throw new Error('Cloudflare D1 environment binding "DB" is not available. Make sure you are running within a Cloudflare Pages context or with `next-on-pages` locally.');
+export async function getDb() {
+  const { env } = await getCloudflareContext({ async: true });
+  if (!env || !(env as any).DB) {
+    throw new Error('Cloudflare D1 environment binding "DB" is not available. Make sure you are running within a Cloudflare Workers context.');
   }
-  return drizzle(env.DB, { schema });
+  return drizzle((env as any).DB, { schema });
 }

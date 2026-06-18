@@ -13,7 +13,7 @@ export async function getUsers() {
     throw new Error("Unauthorized");
   }
 
-  const db = getDb();
+  const db = await getDb();
   let query;
 
   if (session.user.role === "SUPER_ADMIN") {
@@ -32,7 +32,7 @@ export async function createUser(data: any) {
     throw new Error("Unauthorized");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   // Validate admin limits
   if (session.user.role === "ADMIN") {
@@ -74,7 +74,7 @@ export async function deleteUser(id: string, transferToId?: string) {
     throw new Error("Unauthorized: Only Super Admin can delete users");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   if (transferToId) {
     await db
@@ -103,7 +103,7 @@ export async function updateUser(id: string, data: any) {
     throw new Error("Unauthorized");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   const updateData: any = {
     name: data.name,

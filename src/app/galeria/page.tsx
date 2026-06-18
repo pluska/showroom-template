@@ -26,12 +26,7 @@ const GalleryPage = () => {
       getGalleryCollections().then((data) => {
         const activeCollections = data.filter(c => c.isActive);
         setCollections(activeCollections);
-        if (activeCollections.length > 0) {
-          setActiveTabId(activeCollections[0].id);
-        } else {
-          setIsLoading(false);
-          setGlobalLoading(false);
-        }
+        setActiveTabId('amenities');
       });
     });
   }, [setGlobalLoading]);
@@ -180,67 +175,49 @@ const GalleryPage = () => {
                 <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
                 <span className="text-xs uppercase tracking-widest font-secondary">Cargando Galería...</span>
             </div>
-         ) : displayImages.length > 0 && currentImage ? (
-           <>
-             {/* Prev Arrow */}
-             <button 
-                 className="absolute left-6 z-20 w-12 h-12 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/80 transition-all backdrop-blur-sm border border-white/10 duration-300"
-                 onClick={handlePrev}
-             >
-                 <ChevronLeft size={24} />
-             </button>
-
-             {/* Image */}
-             <div className="w-full h-full p-0 flex items-center justify-center">
-                <img 
-                    key={currentImage.src}
-                    src={currentImage.src} 
-                    alt={currentImage.alt} 
-                    className="w-full h-full object-contain" 
-                />
-             </div>
-
-             {/* Next Arrow */}
-             <button 
-                 className="absolute right-6 z-20 w-12 h-12 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/80 transition-all backdrop-blur-sm border border-white/10 duration-300"
-                 onClick={handleNext}
-             >
-                 <ChevronRight size={24} />
-             </button>
-
-             {/* Floating Categories Bar (overlay bottom center) */}
-             {collections.length > 1 && (
-               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 p-1.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-full max-w-[90%] overflow-x-auto scrollbar-none pointer-events-auto">
-                 {collections.map((col) => (
-                   <button
-                     key={col.id}
-                     onClick={() => {
-                       setActiveTabId(col.id);
-                       setCurrentIndex(0);
-                     }}
-                     className={`px-4 py-2 text-xs font-secondary uppercase tracking-widest rounded-full transition-all duration-300 whitespace-nowrap ${
-                       activeTabId === col.id
-                         ? 'bg-brand-primary text-white font-bold shadow-md'
-                         : 'text-gray-400 hover:text-white hover:bg-white/5'
-                     }`}
-                   >
-                     {col.title}
-                   </button>
-                 ))}
-               </div>
-             )}
-
-             {/* Counter/Index */}
-             <div className="absolute bottom-6 right-6 z-20 pointer-events-none">
-                 <div className="text-xs font-medium bg-black/30 text-white px-3 py-1 rounded-full backdrop-blur-md border border-white/10">
-                    {currentIndex + 1} / {displayImages.length}
-                 </div>
-             </div>
-           </>
          ) : (
-            <div className="text-gray-500 font-secondary text-sm uppercase tracking-widest">
-                No hay imágenes configuradas en esta galería.
-            </div>
+           <>
+             {displayImages.length > 0 && currentImage ? (
+               <>
+                 {/* Prev Arrow */}
+                 <button 
+                     className="absolute left-6 z-20 w-12 h-12 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/80 transition-all backdrop-blur-sm border border-white/10 duration-300"
+                     onClick={handlePrev}
+                 >
+                     <ChevronLeft size={24} />
+                 </button>
+
+                 {/* Image */}
+                 <div className="w-full h-full p-0 flex items-center justify-center">
+                    <img 
+                        key={currentImage.src}
+                        src={currentImage.src} 
+                        alt={currentImage.alt} 
+                        className="w-full h-full object-contain" 
+                    />
+                 </div>
+
+                 {/* Next Arrow */}
+                 <button 
+                     className="absolute right-6 z-20 w-12 h-12 rounded-full bg-black/40 text-white flex items-center justify-center hover:bg-black/80 transition-all backdrop-blur-sm border border-white/10 duration-300"
+                     onClick={handleNext}
+                 >
+                     <ChevronRight size={24} />
+                 </button>
+
+                 {/* Counter/Index */}
+                 <div className="absolute bottom-6 right-6 z-20 pointer-events-none">
+                     <div className="text-xs font-medium bg-black/30 text-white px-3 py-1 rounded-full backdrop-blur-md border border-white/10">
+                        {currentIndex + 1} / {displayImages.length}
+                     </div>
+                 </div>
+               </>
+             ) : (
+                <div className="text-gray-500 font-secondary text-sm uppercase tracking-widest">
+                    No hay imágenes configuradas en esta galería.
+                </div>
+             )}
+           </>
          )}
       </div>
 

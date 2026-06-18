@@ -1,4 +1,5 @@
 
+import Logo from '@/components/UI/Logo';
 
 interface LogoLoaderProps {
   className?: string;
@@ -12,11 +13,7 @@ const LogoLoader = ({ className = "fixed inset-0 z-50 bg-black flex items-center
              <div className="absolute inset-0 bg-brand-orange/20 blur-xl rounded-full animate-pulse" />
              
              {/* Logo */}
-             <img 
-                src="/identity/identity_logo_ISOTIPO.png" 
-                alt="Loading..." 
-                className="w-16 h-16 object-contain relative z-10 animate-pulse" 
-            />
+             <Logo className="text-4xl relative z-10 animate-pulse" />
         </div>
     </div>
   );

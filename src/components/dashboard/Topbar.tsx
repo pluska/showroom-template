@@ -2,7 +2,6 @@
 
 import { signOut } from "next-auth/react";
 import { User } from "lucide-react";
-import ThemeToggle from "@/components/UI/ThemeToggle";
 import { usePathname } from "next/navigation";
 
 interface TopbarProps {
@@ -44,7 +43,6 @@ export default function Topbar({ user }: TopbarProps) {
         <h1 className="text-xl font-bold text-brand-orange">{moduleTitle}</h1>
       </div>
       <div className="flex items-center gap-4">
-        <ThemeToggle />
         <div className="flex items-center gap-2">
           <div className="avatar placeholder">
             <div className="bg-primary text-primary-content rounded-full w-8 h-8 flex items-center justify-center">

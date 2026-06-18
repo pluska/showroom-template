@@ -30,7 +30,7 @@ async function logAction(
 // ----------------------------------------------------
 
 export async function getFloors() {
-  const db = getDb();
+  const db = await getDb();
   return await db
     .select()
     .from(floors)
@@ -47,7 +47,7 @@ export async function getFloorsData() {
     // Ignore runtime/environment issues during local dev/tests
   }
 
-  const db = getDb();
+  const db = await getDb();
   
   const allFloors = await db
     .select()
@@ -79,11 +79,28 @@ export async function getFloorsData() {
         
         let subtitle = 'Flat';
         if (u.type === 'STORAGE') {
-          subtitle = 'Bodega';
+          if (u.identifier.startsWith('PB')) {
+            subtitle = `Depósito ${u.identifier.replace('PB ', '')}`;
+          } else if (['101', '102', '103', '104', '105'].includes(u.identifier)) {
+            subtitle = `Estacionamiento ${u.identifier.slice(-1)}`;
+          } else {
+            subtitle = 'Bodega';
+          }
         } else if (u.identifier === 'Terraza') {
           subtitle = 'Terraza';
         } else if (u.identifier === '801') {
-          subtitle = 'Duplex';
+          subtitle = 'Dúplex';
+        }
+
+        let assetId = u.identifier;
+        if (u.identifier.endsWith('01') && u.identifier !== '801') {
+          assetId = 'x01';
+        } else if (u.identifier.endsWith('02') && u.identifier !== '802') {
+          assetId = 'x02';
+        } else if (u.identifier === '801') {
+          assetId = f.level === 9 ? '901' : '801';
+        } else if (u.identifier === 'Terraza') {
+          assetId = '902';
         }
 
         return {
@@ -100,6 +117,7 @@ export async function getFloorsData() {
           description: '',
           images: u.gallery ? (u.gallery as string[]) : [],
           tourUrl: u.tourUrl || undefined,
+          assetId,
           x: coords?.x,
           y: coords?.y,
           path: coords?.path,
@@ -126,7 +144,7 @@ export async function createFloor(data: {
     throw new Error("Unauthorized: Solo el Super Administrador puede crear plantas.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   const [newFloor] = await db
     .insert(floors)
     .values({
@@ -161,7 +179,7 @@ export async function updateFloor(
     throw new Error("Unauthorized: Solo el Super Administrador puede editar plantas.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   
   // Get original floor
   const [original] = await db.select().from(floors).where(eq(floors.id, id));
@@ -194,7 +212,7 @@ export async function deleteFloor(id: string) {
     throw new Error("Unauthorized: Solo el Super Administrador puede eliminar plantas.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   // Find units that will be soft-deleted recursively
   const relatedUnits = await db
@@ -234,7 +252,7 @@ export async function deleteFloor(id: string) {
 // ----------------------------------------------------
 
 export async function getUnits() {
-  const db = getDb();
+  const db = await getDb();
   return await db
     .select()
     .from(units)
@@ -261,7 +279,7 @@ export async function createUnit(data: {
     throw new Error("Unauthorized: Solo el Super Administrador puede crear unidades.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   const [newUnit] = await db
     .insert(units)
     .values({
@@ -313,7 +331,7 @@ export async function updateUnit(
     throw new Error("Unauthorized: Solo el Super Administrador puede editar detalles de la unidad.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   
   // Get original unit
   const [original] = await db.select().from(units).where(eq(units.id, id));
@@ -353,7 +371,7 @@ export async function updateUnitState(id: string, newState: string) {
     throw new Error("Unauthorized: Debes iniciar sesión.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   
   // Get original unit
   const [original] = await db.select().from(units).where(eq(units.id, id));
@@ -378,13 +396,17 @@ export async function updateUnitState(id: string, newState: string) {
     }
   }
 
+  // If we are updating a duplex (units sharing the same identifier across floors), sync their states
   const [updatedUnit] = await db
     .update(units)
     .set({
       state: newState,
       updatedAt: new Date(),
     })
-    .where(eq(units.id, id))
+    .where(and(
+      eq(units.identifier, original.identifier),
+      isNull(units.deletedAt)
+    ))
     .returning();
 
   await logAction(db, session, "UPDATE", "unit", id, {
@@ -404,7 +426,7 @@ export async function deleteUnit(id: string) {
     throw new Error("Unauthorized: Solo el Super Administrador puede eliminar unidades.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   const now = new Date();
 
   const [deletedUnit] = await db
@@ -426,7 +448,7 @@ export async function deleteUnit(id: string) {
 // ----------------------------------------------------
 
 export async function getLogs() {
-  const db = getDb();
+  const db = await getDb();
   return await db
     .select()
     .from(logs)

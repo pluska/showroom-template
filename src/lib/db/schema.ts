@@ -47,6 +47,11 @@ export const units = sqliteTable('units', {
   floorId: text('floor_id').references(() => floors.id).notNull(),
   identifier: text('identifier').notNull(),
   type: text('type'),
+  // TODO: There is no real subcategory field to distinguish a "Flat" from a "Duplex".
+  // It is currently *inferred* (in src/app/contact/page.tsx a duplex = same identifier
+  // spanning more than one floor; in getFloorsData it is hardcoded as identifier === '801').
+  // Proper fix: add a dedicated field here, e.g. `subtype: text('subtype')` ('FLAT' | 'DUPLEX'),
+  // expose it in the units dashboard, and stop inferring it across the app.
   bedrooms: integer('bedrooms'),
   bathrooms: integer('bathrooms'),
   areaSqm: integer('area_sqm'),

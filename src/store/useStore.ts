@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { buildingFaces, type BuildingFace } from '../data/buildingData';
 import { preloadVideo, preloadImages } from '../utils/preload';
 import { type Floor } from '../data/floors';
+import { getAssetUrl } from '../utils/assets';
 
 interface ShowroomState {
   currentFloor: number | null;
@@ -25,7 +26,7 @@ interface ShowroomState {
   // Actions
   setFloor: (floor: number | string) => Promise<void>;
   preloadAllFloors: () => Promise<void>;
-  startTransition: (destination: string) => void;
+  startTransition: (destination: string) => Promise<void>;
   endTransition: (newRoom: string) => void;
   rotateBuilding: (direction: 'left' | 'right') => Promise<void>;
   confirmRotation: () => void;
@@ -85,7 +86,7 @@ export const useStore = create<ShowroomState>((set, get) => ({
     if (floor) {
         set({ isLoadingAssets: true });
         try {
-            await preloadImages([floor.floorPlanImage]);
+            await preloadImages([getAssetUrl(floor.floorPlanImage)]);
         } catch(e) { console.warn("Floor preload failed", e); }
         set({ isLoadingAssets: false });
     }
@@ -94,7 +95,7 @@ export const useStore = create<ShowroomState>((set, get) => ({
   },
 
   preloadAllFloors: async () => {
-    const allFloorImages = get().floorsData.map(f => f.floorPlanImage);
+    const allFloorImages = get().floorsData.map(f => getAssetUrl(f.floorPlanImage));
     try {
         // Preload efficiently in background
         await preloadImages(allFloorImages);
@@ -103,7 +104,7 @@ export const useStore = create<ShowroomState>((set, get) => ({
     }
   },
   
-  startTransition: (destination) => {
+  startTransition: async (destination) => {
     const state = get();
     const face = state.buildingFacesData[state.currentFace] || state.buildingFacesData[0];
     if (!face) return;
@@ -111,7 +112,27 @@ export const useStore = create<ShowroomState>((set, get) => ({
     // Use the introWalk video for the current face/time as the transition to inside
     const videoUrl = assetSet.introVideo;
 
-    set({ 
+    let targetImage: string | undefined;
+    if (destination === 'Floors') {
+      const targetFloor = state.floorsData.find(f => f.id === '9');
+      if (targetFloor) {
+        targetImage = getAssetUrl(targetFloor.floorPlanImage);
+      }
+    }
+
+    if (videoUrl) {
+      set({ isLoadingAssets: true });
+      try {
+        const promises: Promise<void | HTMLImageElement>[] = [preloadVideo(videoUrl)];
+        if (targetImage) {
+          promises.push(preloadImages([targetImage]));
+        }
+        await Promise.all(promises);
+      } catch (e) { console.warn('Failed to preload transition video and image', e); }
+      set({ isLoadingAssets: false });
+    }
+
+    set({
       viewState: 'TRANSITION_VIDEO',
       targetDestination: destination,
       transitionUrl: videoUrl
@@ -159,51 +180,23 @@ export const useStore = create<ShowroomState>((set, get) => ({
       return;
     }
 
-    // Preload Logic
-    set({ isLoadingAssets: true });
-    
-    // Determine the next background image to preload
     const nextFaceData = state.buildingFacesData[nextFaceIndex];
-    if (nextFaceData) {
-      const nextTimeData = nextFaceData[state.timeOfDay]; // 'day' or 'night'
-      const nextBackgroundUrl = nextTimeData.background;
+    const nextBackgroundUrl = nextFaceData ? nextFaceData[state.timeOfDay]?.background : undefined;
 
-      try {
-          // OPTIMIZATION:
-          // We only STRICTLY need the video to start the transition.
-          // The background image is needed ONLY when the video ends.
-          
-          // 1. Race: Video Load vs Timeout (1.5s)
-          // If the video is already cached, preloadVideo resolves instantly.
-          // If it takes too long (network lag), we skip the video to preserve flow.
-          let videoReady = false;
-          try {
-              await Promise.race([
-                  preloadVideo(videoUrl).then(() => { videoReady = true; }),
-                  new Promise(resolve => setTimeout(resolve, 1500))
-              ]);
-          } catch(e) {}
-          
-          if (!videoReady) {
-               console.warn("Transition video slow/not ready - Skipping for instant feedback");
-               // Just snap to the next face immediately
-               set({ currentFace: nextFaceIndex, isLoadingAssets: false });
-               return;
-          }
-          
-          // 2. Start preloading the image in the background (fire and forget)
-          // We don't await this because the video duration usually covers the download time.
-          // Even if it doesn't, the browser will render it as it arrives.
-          preloadImages([nextBackgroundUrl]).catch((e) => console.warn('Background image preload failed', e));
-
-      } catch (e) {
-          console.warn('Failed to preload rotation video', e);
-          // If video fails, we might just snap? For now we proceed to try.
+    // Preload Logic (Blocking, like Unit details page)
+    set({ isLoadingAssets: true });
+    try {
+      const promises: Promise<void | HTMLImageElement>[] = [preloadVideo(videoUrl)];
+      if (nextBackgroundUrl) {
+        promises.push(preloadImages([nextBackgroundUrl]));
       }
+      await Promise.all(promises);
+    } catch (e) {
+      console.warn('Failed to preload rotation video and image', e);
     }
+    set({ isLoadingAssets: false });
     
     set({ 
-      isLoadingAssets: false,
       nextFace: nextFaceIndex, 
       transitionUrl: videoUrl,
       viewState: 'TRANSITION_ROTATION' 
@@ -233,11 +226,17 @@ export const useStore = create<ShowroomState>((set, get) => ({
     if (!currentFaceData) return;
     const isDay = state.timeOfDay === 'day';
     const videoUrl = isDay ? currentFaceData.dayToNightTransition : currentFaceData.nightToDayTransition;
-    
+    const targetBackground = isDay ? currentFaceData.night?.background : currentFaceData.day?.background;
+    const nextTimeOfDay = isDay ? 'night' : 'day';
+
     if (videoUrl) {
         set({ isLoadingAssets: true });
         try {
-            await preloadVideo(videoUrl);
+            const promises: Promise<void | HTMLImageElement>[] = [preloadVideo(videoUrl)];
+            if (targetBackground) {
+                promises.push(preloadImages([targetBackground]));
+            }
+            await Promise.all(promises);
         } catch (e) { console.warn('Failed to preload timelapse', e); }
         set({ isLoadingAssets: false });
     }

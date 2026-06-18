@@ -5,7 +5,7 @@ import { useStore } from '@/store/useStore';
 import SceneController from '@/components/360/SceneController';
 import Sidebar from '@/components/layout/Sidebar';
 import { Sun, Moon, Rotate3d } from 'lucide-react';
-import { preloadImages, preloadVideo } from '@/utils/preload';
+import { preloadImages } from '@/utils/preload';
 import { getAssetUrl } from '@/utils/assets';
 import Loader from '@/components/UI/Loader';
 import FullScreenToggle from '@/components/UI/FullScreenToggle';
@@ -14,7 +14,7 @@ import { showroomConfig } from '@/data/showroom';
 const ShowroomContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   const startTransition = useStore(state => state.startTransition);
   const viewState = useStore(state => state.viewState);
   const currentRoom = useStore(state => state.currentRoom);
@@ -23,153 +23,140 @@ const ShowroomContent = () => {
   const toggleTimeOfDay = useStore(state => state.toggleTimeOfDay);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isHoveringIngresar, setIsHoveringIngresar] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<'left' | 'right' | 'daynight' | 'enter' | null>(null);
   const currentFace = useStore(state => state.currentFace);
   const isLoadingAssets = useStore(state => state.isLoadingAssets);
   const buildingFacesData = useStore(state => state.buildingFacesData);
 
+  useEffect(() => {
+    if (!isLoadingAssets) setLoadingAction(null);
+  }, [isLoadingAssets]);
+
   // Reset state on mount or params change
+  const transitionParam = searchParams.get('transition');
+
   useEffect(() => {
     const initShowroom = async () => {
-        // Set loading initially
-        useStore.setState({ isLoadingAssets: true });
-        
-        const transition = searchParams.get('transition');
-        // targetPath is handled by the store or router logic usually, 
-        // but here we just need to know if we are entering via a specific flow.
-        
-        // Reset to Day if entering via Intro (or fresh load) because the Intro video is Day-only.
-        const shouldResetToDay = !transition || transition === 'intro';
+      // NOTE: we intentionally do NOT set isLoadingAssets here. The initial
+      // background is preloaded below to warm the cache, but it must not block
+      // the UI / navigation. isLoadingAssets is reserved for the rotation and
+      // day/night toggles, which disable only their own buttons while their
+      // specific transition video loads.
 
-        useStore.setState({ 
-          currentRoom: showroomConfig.initialRoom, 
-          viewState: 'IDLE',
-          currentFloor: showroomConfig.initialFloor, 
-          transitionUrl: null,
-          currentFace: showroomConfig.initialFace,
-          ...(shouldResetToDay ? { timeOfDay: 'day' } : {})
-        });
-        
-        if (transition && buildingFacesData.length > 0) {
-             const face0 = buildingFacesData[0];
-             
-             if (transition === 'intro') {
-                 // Showroom: Matches Homepage "Entrar" video
-                 const introVideoUrl = getAssetUrl('videos/walks/trans_intro_to_0.mp4');
-                 
-                 useStore.setState({ 
-                     viewState: 'TRANSITION_VIDEO',
-                     transitionUrl: introVideoUrl,
-                     targetDestination: 'Lobby' 
-                 });
-             } else if (transition === 'floors') {
-                 // Plantas: Uses the generic "Central View" walk (Day/Night sensitive)
-                 const floorsVideoUrl = timeOfDay === 'day' ? face0?.day?.introVideo : face0?.night?.introVideo;
-                 
-                 if (floorsVideoUrl) {
-                     useStore.setState({ 
-                         viewState: 'TRANSITION_VIDEO',
-                         transitionUrl: floorsVideoUrl,
-                         targetDestination: 'Floors'
-                     });
-                 }
-             }
+      const transition = transitionParam;
+      // targetPath is handled by the store or router logic usually, 
+      // but here we just need to know if we are entering via a specific flow.
+
+      // Reset to Day if entering via Intro (or fresh load) because the Intro video is Day-only.
+      const shouldResetToDay = !transition || transition === 'intro';
+
+      useStore.setState({
+        currentRoom: showroomConfig.initialRoom,
+        viewState: 'IDLE',
+        currentFloor: showroomConfig.initialFloor,
+        transitionUrl: null,
+        currentFace: showroomConfig.initialFace,
+        ...(shouldResetToDay ? { timeOfDay: 'day' } : {})
+      });
+
+      const faces = useStore.getState().buildingFacesData;
+      const currentTimeOfDay = useStore.getState().timeOfDay;
+
+      if (transition && faces.length > 0) {
+        const face0 = faces[0];
+
+        if (transition === 'intro') {
+          // Showroom: Matches Homepage "Entrar" video
+          const introVideoUrl = getAssetUrl('videos/walks/trans_intro_to_0.mp4');
+
+          useStore.setState({
+            viewState: 'TRANSITION_VIDEO',
+            transitionUrl: introVideoUrl,
+            targetDestination: 'Lobby'
+          });
+        } else if (transition === 'floors') {
+          // Plantas: Uses the generic "Central View" walk (Day/Night sensitive)
+          const floorsVideoUrl = currentTimeOfDay === 'day' ? face0?.day?.introVideo : face0?.night?.introVideo;
+
+          if (floorsVideoUrl) {
+            useStore.setState({
+              viewState: 'TRANSITION_VIDEO',
+              transitionUrl: floorsVideoUrl,
+              targetDestination: 'Floors'
+            });
+          }
         }
+      }
 
-        try {
-            if (buildingFacesData.length > 0) {
-                const face0 = buildingFacesData[0];
-                const determinedTime = shouldResetToDay ? 'day' : (transition === 'floors' ? timeOfDay : 'day');
-                
-                const mainAsset = determinedTime === 'day' ? face0?.day?.background : face0?.night?.background;
-                const secondaryAsset = determinedTime === 'day' ? face0?.night?.background : face0?.day?.background;
+      try {
+        if (faces.length > 0) {
+          const face0 = faces[0];
+          const determinedTime = shouldResetToDay ? 'day' : (transition === 'floors' ? currentTimeOfDay : 'day');
 
-                if (mainAsset) await preloadImages([mainAsset]);
-                if (secondaryAsset) preloadImages([secondaryAsset]).catch(() => {});
-            }
-        } catch (e) { console.warn("Showroom mount preload failed", e); }
-        
-        useStore.setState({ isLoadingAssets: false });
+          const mainAsset = determinedTime === 'day' ? face0?.day?.background : face0?.night?.background;
+          const secondaryAsset = determinedTime === 'day' ? face0?.night?.background : face0?.day?.background;
+
+          // Fire-and-forget cache warming — never block the UI / navigation.
+          if (mainAsset) preloadImages([mainAsset]).catch(() => { });
+          if (secondaryAsset) preloadImages([secondaryAsset]).catch(() => { });
+        }
+      } catch (e) { console.warn("Showroom mount preload failed", e); }
     };
 
     initShowroom();
-  }, [searchParams, buildingFacesData]); // Re-run if params or faces change
+  }, [transitionParam]); // Re-run only if transition param changes
 
   // Proximity Loading Logic
   useEffect(() => {
-      // Don't preload if we are transitioning or not in lobby
-      if (currentRoom !== 'Lobby' || buildingFacesData.length === 0) return;
+    // Don't preload if we are transitioning or not in lobby
+    if (currentRoom !== 'Lobby' || buildingFacesData.length === 0) return;
 
-      const currentFaceData = buildingFacesData[currentFace] || buildingFacesData[0];
-      if (!currentFaceData) return;
+    const currentFaceData = buildingFacesData[currentFace] || buildingFacesData[0];
+    if (!currentFaceData) return;
 
-      const fastImagesToLoad: string[] = []; 
-      const secondaryImagesToLoad: string[] = []; 
-      const videosToLoad: string[] = []; 
+    const fastImagesToLoad: string[] = [];
+    const secondaryImagesToLoad: string[] = [];
 
-      // 1. Identify Adjacent Faces
-      const adjacentIds = [];
-      if (currentFace === 0) {
-          if (buildingFacesData.length > 1) adjacentIds.push(1);
-          if (buildingFacesData.length > 2) adjacentIds.push(2);
-      } else {
-          adjacentIds.push(0);
+    // 1. Every other face's background for the current time of day. There are
+    // only ever 2-3 faces, so warming all of them (not just the immediate
+    // neighbors) removes the first-click wait no matter which direction the
+    // user rotates, while staying cheap.
+    buildingFacesData.forEach((face, id) => {
+      if (id === currentFace) return;
+      const assetSet = timeOfDay === 'day' ? face.day : face.night;
+      if (assetSet?.background) fastImagesToLoad.push(assetSet.background);
+    });
+
+    // 2. Alt time-of-day background for the current face
+    if (timeOfDay === 'day' && currentFaceData?.night?.background) {
+      secondaryImagesToLoad.push(currentFaceData.night.background);
+    } else if (timeOfDay === 'night' && currentFaceData?.day?.background) {
+      secondaryImagesToLoad.push(currentFaceData.day.background);
+    }
+
+    // NOTE: transition/walk VIDEOS are intentionally NOT preloaded here. They
+    // are multi-MB and, with the browser's ~6 connections-per-host limit, they
+    // saturated the pool and queued client-side navigation behind them (e.g.
+    // tapping "Contacto" closed the menu but only navigated ~a minute later).
+    // The specific transition video is preloaded on demand by rotateBuilding /
+    // toggleTimeOfDay when the user actually triggers it.
+
+    // Execution
+    if (fastImagesToLoad.length > 0) {
+      preloadImages(fastImagesToLoad).catch(() => console.warn('Fast preload failed'));
+    }
+
+    const secondaryTimer = setTimeout(() => {
+      if (secondaryImagesToLoad.length > 0) {
+        preloadImages(secondaryImagesToLoad).catch(() => { });
       }
+    }, 4000);
 
-      adjacentIds.forEach(id => {
-          const face = buildingFacesData[id];
-          if (!face) return;
-          const assetSet = timeOfDay === 'day' ? face.day : face.night;
-          
-          if (assetSet?.background) fastImagesToLoad.push(assetSet.background);
-          
-          const currentAssetSet = currentFaceData[timeOfDay];
-          if (id === 1 && currentFace === 0 && currentAssetSet?.transitions?.toRight) {
-              videosToLoad.push(currentAssetSet.transitions.toRight); 
-          }
-          if (id === 2 && currentFace === 0 && currentAssetSet?.transitions?.toLeft) {
-              videosToLoad.push(currentAssetSet.transitions.toLeft);
-          }
-          if (currentFace !== 0 && currentAssetSet?.transitions?.toLeft) {
-              videosToLoad.push(currentAssetSet.transitions.toLeft);
-          }
-      });
+    return () => {
+      clearTimeout(secondaryTimer);
+    };
 
-      // 2. Identify Alt Time of Day
-      if (timeOfDay === 'day' && currentFaceData?.night?.background) {
-          secondaryImagesToLoad.push(currentFaceData.night.background);
-      } else if (timeOfDay === 'night' && currentFaceData?.day?.background) {
-          secondaryImagesToLoad.push(currentFaceData.day.background);
-      }
-
-      // 3. Preload "Ingresar" Walk Video
-      if (currentFace === 0) {
-          const walkVideo = timeOfDay === 'day' ? currentFaceData.day?.introVideo : currentFaceData.night?.introVideo;
-          if (walkVideo) videosToLoad.push(walkVideo);
-      }
-
-      // Execution
-      if (fastImagesToLoad.length > 0) {
-          preloadImages(fastImagesToLoad).catch(() => console.warn('Fast preload failed'));
-      }
-
-      const videoTimer = setTimeout(() => {
-          if (videosToLoad.length > 0) {
-             videosToLoad.forEach(v => preloadVideo(v).catch(() => {}));
-          }
-      }, 2000);
-
-      const secondaryTimer = setTimeout(() => {
-          if (secondaryImagesToLoad.length > 0) {
-              preloadImages(secondaryImagesToLoad).catch(() => {});
-          }
-      }, 4000);
-
-      return () => {
-          clearTimeout(videoTimer);
-          clearTimeout(secondaryTimer);
-      };
-
-  }, [currentFace, timeOfDay, currentRoom, buildingFacesData]); 
+  }, [currentFace, timeOfDay, currentRoom, buildingFacesData]);
 
   const currentFaceData = buildingFacesData[currentFace] || buildingFacesData[0];
   const hasLeftTransition = currentFaceData ? !!currentFaceData[timeOfDay]?.transitions?.toLeft : false;
@@ -184,7 +171,7 @@ const ShowroomContent = () => {
       <SceneController isHighlighted={isHoveringIngresar} />
 
       <div className="fixed top-6 left-6 z-30 group">
-        <button 
+        <button
           onClick={() => setIsSidebarOpen(true)}
           className="p-2 text-white bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 rounded-full transition-all hover:scale-105 cursor-pointer shadow-lg"
         >
@@ -199,27 +186,30 @@ const ShowroomContent = () => {
 
       {/* Recorrido General Button */}
       {viewState === 'IDLE' && (
-      <button 
-        onClick={() => router.push('/recorridos?tourId=building-main')}
-        className="fixed top-6 left-1/2 -translate-x-1/2 z-30 px-6 py-2 bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 rounded-full text-white font-medium text-sm transition-all hover:scale-105 cursor-pointer shadow-lg uppercase tracking-wide flex items-center gap-2"
-      >
-        <Rotate3d size={18} />
-        Recorrido General 
-      </button>
+        <button
+          onClick={() => router.push('/recorridos?tourId=building-main')}
+          disabled={isLoadingAssets}
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-30 px-6 py-2 bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 rounded-full text-white font-medium text-sm transition-all duration-300 hover:scale-105 cursor-pointer shadow-lg uppercase tracking-wide flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+        >
+          <Rotate3d size={18} />
+          Recorrido General
+        </button>
       )}
 
       {/* Right-side Controls Stack */}
       <div className="fixed top-6 right-6 z-30 flex flex-col gap-4 items-end">
-        
+
         {/* Day/Night Toggle */}
         {viewState === 'IDLE' && (
           <div className="relative group">
-            <button 
-              onClick={toggleTimeOfDay}
+            <button
+              onClick={() => { setLoadingAction('daynight'); toggleTimeOfDay(); }}
               disabled={isLoadingAssets}
-              className={`p-3 bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 rounded-full text-white transition-all hover:scale-110 cursor-pointer shadow-lg ${isLoadingAssets ? 'opacity-50 cursor-wait' : ''}`}
+              className="p-3 bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 rounded-full text-white transition-all hover:scale-110 cursor-pointer shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              {isLoadingAssets ? <Loader className="w-6 h-6" /> : (timeOfDay === 'day' ? <Moon size={24} /> : <Sun size={24} />)}
+              {loadingAction === 'daynight' ? (
+                <Loader className="w-6 h-6" />
+              ) : timeOfDay === 'day' ? <Moon size={24} /> : <Sun size={24} />}
             </button>
             <div className="absolute top-1/2 right-full mr-3 -translate-y-1/2 px-3 py-1 bg-black/80 backdrop-blur-sm text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
               {timeOfDay === 'day' ? 'Switch to Night' : 'Switch to Day'}
@@ -232,37 +222,41 @@ const ShowroomContent = () => {
       </div>
 
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      
+
       {/* Rotation UI */}
       {showLeftButton && (
-          <button 
-            onClick={() => rotateBuilding('left')}
-            disabled={isLoadingAssets}
-            className={`fixed top-1/2 left-4 -translate-y-1/2 z-40 p-3 rounded-full bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 text-white transition-all hover:scale-110 cursor-pointer ${isLoadingAssets ? 'opacity-50 cursor-wait' : ''}`}
-          >
-            {isLoadingAssets ? <Loader className="w-8 h-8" /> : (
+        <button
+          onClick={() => { setLoadingAction('left'); rotateBuilding('left'); }}
+          disabled={isLoadingAssets}
+          className="fixed top-1/2 left-4 -translate-y-1/2 z-40 p-3 rounded-full bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 text-white transition-all duration-300 hover:scale-110 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+        >
+          {loadingAction === 'left' ? (
+            <Loader className="h-8 w-8" />
+          ) : (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            )}
-          </button>
+          )}
+        </button>
       )}
 
       {showRightButton && (
-          <button 
-            onClick={() => rotateBuilding('right')}
-            disabled={isLoadingAssets}
-            className={`fixed top-1/2 right-4 -translate-y-1/2 z-40 p-3 rounded-full bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 text-white transition-all hover:scale-110 cursor-pointer ${isLoadingAssets ? 'opacity-50 cursor-wait' : ''}`}
-          >
-            {isLoadingAssets ? <Loader className="w-8 h-8" /> : (
+        <button
+          onClick={() => { setLoadingAction('right'); rotateBuilding('right'); }}
+          disabled={isLoadingAssets}
+          className="fixed top-1/2 right-4 -translate-y-1/2 z-40 p-3 rounded-full bg-brand-primary/80 hover:bg-brand-primary backdrop-blur-xl border border-white/20 text-white transition-all duration-300 hover:scale-110 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+        >
+          {loadingAction === 'right' ? (
+            <Loader className="h-8 w-8" />
+          ) : (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            )}
-          </button>
+          )}
+        </button>
       )}
 
-      {/* Structure Reference Image */}
+      {/* Structure Reference Image 
       {viewState === 'IDLE' && (
         <div className="fixed bottom-6 md:bottom-10 sm:bottom-3 left-6 md:left-10 sm:left-3 z-20 pointer-events-none select-none">
           <img 
@@ -271,30 +265,30 @@ const ShowroomContent = () => {
             className="w-auto h-48 sm:h-32 opacity-90 drop-shadow-lg"
           />
         </div>
-      )}
+      )} */}
 
       {/* Floating UI */}
       {viewState === 'IDLE' && (
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50">
-        <button 
-          onClick={() => startTransition('Floors')} 
-          disabled={isLoadingAssets}
-          onMouseEnter={() => setIsHoveringIngresar(true)}
-          onMouseLeave={() => setIsHoveringIngresar(false)}
-          className={`bg-brand-primary/80 backdrop-blur-xl border border-white/20 text-white px-8 py-3 rounded-full hover:bg-brand-primary transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 ${isLoadingAssets ? 'cursor-wait' : ''}`}
-        >
-          {isLoadingAssets ? <Loader /> : 'Ingresar'}
-        </button>
-      </div>
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50">
+          <button
+            onClick={() => { setLoadingAction('enter'); startTransition('Floors'); }}
+            onMouseEnter={() => setIsHoveringIngresar(true)}
+            onMouseLeave={() => setIsHoveringIngresar(false)}
+            disabled={isLoadingAssets}
+            className="bg-brand-primary/80 backdrop-blur-xl border border-white/20 text-white px-8 py-3 rounded-full hover:bg-brand-primary transition-all duration-300 cursor-pointer flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loadingAction === 'enter' ? <Loader className="w-[18px] h-[18px]" /> : 'Ingresar'}
+          </button>
+        </div>
       )}
     </div>
   );
 };
 
 export default function ShowroomPage() {
-    return (
-        <Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-black text-white"><Loader /></div>}>
-            <ShowroomContent />
-        </Suspense>
-    )
+  return (
+    <Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-black text-white"><Loader /></div>}>
+      <ShowroomContent />
+    </Suspense>
+  )
 }

@@ -1,3 +1,9 @@
+// ============================================================================
+// HISTORICAL STATIC DATA — DO NOT USE IN PRODUCTION
+// This file is kept as a reference. The source of truth is the D1 database.
+// See: src/lib/db/schema.ts and seed.sql for the database schema and seed data.
+// ============================================================================
+
 interface AssetSet {
   background: string;
   backgroundVideo?: string;
@@ -38,7 +44,6 @@ export const buildingFaces: BuildingFace[] = [
     },
     night: {
       background: getAssetUrl('building/photos/face_0_nightlight.png'),
-      backgroundVideo: getAssetUrl('building/videos/face_0_nightlight.mp4'),
       introVideo: getAssetUrl('videos/walks/walk_center_nightlight.mp4'),
       transitions: {
         toLeft: getAssetUrl('building/transitions/trans_0_to_2_nightlight.mp4'),
@@ -56,7 +61,7 @@ export const buildingFaces: BuildingFace[] = [
       introVideo: getAssetUrl('videos/walks/walk_right_daylight.mp4'),
       transitions: {
         toLeft: getAssetUrl('building/transitions/trans_1_to_0_daylight.mp4'),
-        toRight: getAssetUrl('building/transitions/trans_1_to_0_daylight.mp4')
+        toRight: getAssetUrl('building/transitions/trans_1_to_0_daylight.mp4') // Fallback as no 1->2 transition provided
       }
     },
     night: {
@@ -64,7 +69,7 @@ export const buildingFaces: BuildingFace[] = [
       introVideo: getAssetUrl('videos/walks/walk_right_nightlight.mp4'),
       transitions: {
         toLeft: getAssetUrl('building/transitions/trans_1_to_0_nightlight.mp4'),
-        toRight: getAssetUrl('building/transitions/trans_1_to_0_nightlight.mp4')
+        toRight: getAssetUrl('building/transitions/trans_1_to_0_nightlight.mp4') // Fallback as no 1->2 transition provided
       }
     }
   },
@@ -77,7 +82,7 @@ export const buildingFaces: BuildingFace[] = [
       background: getAssetUrl('building/photos/face_2_daylight.png'),
       introVideo: getAssetUrl('videos/walks/walk_left_daylight.mp4'),
       transitions: {
-        toLeft: getAssetUrl('building/transitions/trans_2_to_0_daylight.mp4'),
+        toLeft: getAssetUrl('building/transitions/trans_2_to_0_daylight.mp4'), // Fallback as no 2->1 transition provided
         toRight: getAssetUrl('building/transitions/trans_2_to_0_daylight.mp4')
       }
     },
@@ -85,7 +90,7 @@ export const buildingFaces: BuildingFace[] = [
       background: getAssetUrl('building/photos/face_2_nightlight.png'),
       introVideo: getAssetUrl('videos/walks/walk_left_nightlight.mp4'),
       transitions: {
-        toLeft: getAssetUrl('building/transitions/trans_2_to_0_nightlight.mp4'),
+        toLeft: getAssetUrl('building/transitions/trans_2_to_0_nightlight.mp4'), // Fallback as no 2->1 transition provided
         toRight: getAssetUrl('building/transitions/trans_2_to_0_nightlight.mp4')
       }
     }

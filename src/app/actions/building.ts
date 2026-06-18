@@ -1,6 +1,6 @@
 "use server";
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { buildingFaces } from "@/lib/db/schema";
 import { eq, isNull, asc } from "drizzle-orm";
@@ -45,7 +45,7 @@ function mapDbRowToBuildingFace(row: any): BuildingFace {
     return getAssetUrl(path);
   };
 
-  return {
+  const face: BuildingFace = {
     id: row.id,
     name: row.name,
     dayToNightTransition: resolve(row.dayToNightTransition),
@@ -71,18 +71,29 @@ function mapDbRowToBuildingFace(row: any): BuildingFace {
       }
     }
   };
+
+  // Clean up boundaries so we don't display invalid rotation buttons
+  if (row.order === 1) { // Cara Derecha: No right transition
+    face.day.transitions.toRight = "";
+    face.night.transitions.toRight = "";
+  } else if (row.order === 2) { // Cara Izquierda: No left transition
+    face.day.transitions.toLeft = "";
+    face.night.transitions.toLeft = "";
+  }
+
+  return face;
 }
 
 const defaultFacesSeed = [
   {
     id: 1,
     name: "Cara Central",
-    dayBackground: "building/photos/face_0_daylight.png",
+    dayBackground: "building/photos/face_0_daylight.webp",
     dayBackgroundVideo: "building/videos/face_0_daylight.mp4",
     dayIntroVideo: "videos/walks/walk_center_daylight.mp4",
     dayToLeftTransition: "building/transitions/trans_0_to_2_daylight.mp4",
     dayToRightTransition: "building/transitions/trans_0_to_1_daylight.mp4",
-    nightBackground: "building/photos/face_0_nightlight.png",
+    nightBackground: "building/photos/face_0_nightlight.webp",
     nightBackgroundVideo: "building/videos/face_0_nightlight.mp4",
     nightIntroVideo: "videos/walks/walk_center_nightlight.mp4",
     nightToLeftTransition: "building/transitions/trans_0_to_2_nightlight.mp4",
@@ -94,14 +105,14 @@ const defaultFacesSeed = [
   {
     id: 2,
     name: "Cara Derecha",
-    dayBackground: "building/photos/face_1_daylight.png",
+    dayBackground: "building/photos/face_1_daylight.webp",
     dayIntroVideo: "videos/walks/walk_right_daylight.mp4",
     dayToLeftTransition: "building/transitions/trans_1_to_0_daylight.mp4",
-    dayToRightTransition: "building/transitions/trans_1_to_0_daylight.mp4",
-    nightBackground: "building/photos/face_1_nightlight.png",
+    dayToRightTransition: null,
+    nightBackground: "building/photos/face_1_nightlight.webp",
     nightIntroVideo: "videos/walks/walk_right_nightlight.mp4",
     nightToLeftTransition: "building/transitions/trans_1_to_0_nightlight.mp4",
-    nightToRightTransition: "building/transitions/trans_1_to_0_nightlight.mp4",
+    nightToRightTransition: null,
     dayToNightTransition: "building/transitions/trans_1_day_to_night.mp4",
     nightToDayTransition: "building/transitions/trans_1_night_to_day.mp4",
     order: 1,
@@ -109,13 +120,13 @@ const defaultFacesSeed = [
   {
     id: 3,
     name: "Cara Izquierda",
-    dayBackground: "building/photos/face_2_daylight.png",
+    dayBackground: "building/photos/face_2_daylight.webp",
     dayIntroVideo: "videos/walks/walk_left_daylight.mp4",
-    dayToLeftTransition: "building/transitions/trans_2_to_0_daylight.mp4",
+    dayToLeftTransition: null,
     dayToRightTransition: "building/transitions/trans_2_to_0_daylight.mp4",
-    nightBackground: "building/photos/face_2_nightlight.png",
+    nightBackground: "building/photos/face_2_nightlight.webp",
     nightIntroVideo: "videos/walks/walk_left_nightlight.mp4",
-    nightToLeftTransition: "building/transitions/trans_2_to_0_nightlight.mp4",
+    nightToLeftTransition: null,
     nightToRightTransition: "building/transitions/trans_2_to_0_nightlight.mp4",
     dayToNightTransition: "building/transitions/trans_2_day_to_night.mp4",
     nightToDayTransition: "building/transitions/trans_2_night_to_day.mp4",
@@ -124,7 +135,7 @@ const defaultFacesSeed = [
 ];
 
 export async function getBuildingFacesData(): Promise<BuildingFace[]> {
-  const db = getDb();
+  const db = await getDb();
   
   let rows = await db
     .select()
@@ -160,7 +171,7 @@ export async function getRawBuildingFaces() {
     throw new Error("Unauthorized: Solo el Super Administrador puede ver caras del edificio en el panel.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   
   let rows = await db
     .select()
@@ -187,7 +198,7 @@ export async function createBuildingFace(data: any) {
     throw new Error("Unauthorized: Solo el Super Administrador puede crear caras.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   // Find max order to assign to the new face
   const existing = await db
@@ -231,7 +242,7 @@ export async function updateBuildingFace(id: number, data: any) {
     throw new Error("Unauthorized: Solo el Super Administrador puede actualizar caras.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   const [updatedFace] = await db
     .update(buildingFaces)
@@ -267,7 +278,7 @@ export async function deleteBuildingFace(id: number) {
     throw new Error("Unauthorized: Solo el Super Administrador puede eliminar caras.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   const now = new Date();
 
   // Soft delete the face
@@ -301,7 +312,7 @@ export async function reorderBuildingFaces(orderedIds: number[]) {
     throw new Error("Unauthorized: Solo el Super Administrador puede ordenar las caras.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   for (let i = 0; i < orderedIds.length; i++) {
     await db
@@ -331,7 +342,7 @@ export async function uploadBuildingAsset(formData: FormData) {
   let finalUrl = "";
 
   try {
-    const env = getRequestContext().env as any;
+    const { env } = await getCloudflareContext({ async: true }) as any;
     if (env && env.R2) {
       const arrayBuffer = await file.arrayBuffer();
       await env.R2.put(urlPath, arrayBuffer, {

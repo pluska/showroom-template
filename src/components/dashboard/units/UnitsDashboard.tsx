@@ -350,13 +350,14 @@ export default function UnitsDashboard({
           setUnits(
             units.map((u) =>
               u.id === updated.id
-                ? {
+                ? ({
                     ...updated,
                     photosFurnished: (updated.photosFurnished as string[]) || [],
                     photosUnfurnished: (updated.photosUnfurnished as string[]) || [],
                     photosPlans: (updated.photosPlans as string[]) || [],
                     photosBalcony: (updated.photosBalcony as string[]) || [],
-                  }
+                    gallery: (updated.gallery as string[]) || [],
+                  } as Unit)
                 : u
             )
           );
@@ -371,7 +372,8 @@ export default function UnitsDashboard({
               photosUnfurnished: (created.photosUnfurnished as string[]) || [],
               photosPlans: (created.photosPlans as string[]) || [],
               photosBalcony: (created.photosBalcony as string[]) || [],
-            },
+              gallery: (created.gallery as string[]) || [],
+            } as Unit,
           ]);
           showNotification("success", `Unidad "${created.identifier}" creada.`);
         }

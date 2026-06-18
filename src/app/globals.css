@@ -1,5 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap');
 @import "tailwindcss";
-@plugin "daisyui";
+
+@font-face {
+  font-family: 'Garet';
+  src: url('/fonts/garet/Garet-Heavy.woff2') format('woff2'),
+       url('/fonts/garet/Garet-Heavy.woff') format('woff'),
+       url('/fonts/garet/Garet-Heavy.ttf') format('truetype');
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Garet';
+  src: url('/fonts/garet/Garet-Book.woff2') format('woff2'),
+       url('/fonts/garet/Garet-Book.woff') format('woff'),
+       url('/fonts/garet/Garet-Book.ttf') format('truetype');
+  font-weight: 300 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@plugin "daisyui" {
+  themes: light --default;
+}
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -12,6 +36,8 @@
 
   --font-primary: 'Montserrat', sans-serif;
   --font-secondary: 'Inter', sans-serif;
+  --font-garet: 'Garet', sans-serif;
+  --font-open-sans: 'Open Sans', sans-serif;
 
   --animate-fade-in: fadeIn 0.3s ease-out forwards;
   --animate-scale-in: scaleIn 0.3s ease-out forwards;

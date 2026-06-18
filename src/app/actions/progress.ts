@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 
 export async function getProgressUpdates() {
-  const db = getDb();
+  const db = await getDb();
   
   // Fetch active progress updates ordered by date descending
   let updates = await db
@@ -84,7 +84,7 @@ export async function createProgressUpdate(data: {
     throw new Error("Unauthorized: Solo administradores pueden crear avances de obra.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   const dateVal = new Date(data.year, data.month - 1, 1);
 
   const [newUpdate] = await db
@@ -117,7 +117,7 @@ export async function updateProgressUpdate(
     throw new Error("Unauthorized: Solo administradores pueden editar avances de obra.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   const dateVal = new Date(data.year, data.month - 1, 1);
 
   const [updatedUpdate] = await db
@@ -142,7 +142,7 @@ export async function deleteProgressUpdate(id: string) {
     throw new Error("Unauthorized: Solo administradores pueden eliminar avances de obra.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   await db
     .update(constructionProgress)
     .set({ deletedAt: new Date() })

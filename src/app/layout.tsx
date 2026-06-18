@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 import { Montserrat, Inter } from "next/font/google"; // Using fonts closer to original (Montserrat/Inter)
 import "./globals.css";
 import config from "@/config/config";
 import StoreInitializer from "@/components/layout/StoreInitializer";
+import FloorEntryTransition from "@/components/layout/FloorEntryTransition";
 import { getFloorsData } from "@/app/actions/units";
 import { getBuildingFacesData } from "@/app/actions/building";
 import { type Floor } from "@/data/floors";
@@ -42,33 +43,15 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="es">
+    <html lang="es" data-theme="light" style={{ colorScheme: "light" }}>
       <head>
         <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var savedTheme = localStorage.getItem('theme');
-                  var theme = savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-                  if (theme === 'dark') {
-                    document.documentElement.classList.add('dark');
-                    document.documentElement.setAttribute('data-theme', 'dark');
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                    document.documentElement.setAttribute('data-theme', 'light');
-                  }
-                } catch (e) {}
-              })();
-            `
-          }}
-        />
       </head>
       <body
-        className={`${montserrat.variable} ${inter.variable} antialiased h-screen w-screen overflow-hidden bg-base-100 text-base-content`}
+        className={`${montserrat.variable} ${inter.variable} antialiased h-screen w-screen overflow-hidden bg-black text-white`}
       >
         <StoreInitializer initialFloorsData={floorsData} initialBuildingFacesData={buildingFacesData} />
+        <FloorEntryTransition />
 
         {children}
       </body>

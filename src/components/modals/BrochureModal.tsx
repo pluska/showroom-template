@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { X, Download, FileText, Loader2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getAssetUrl } from '../../utils/assets';
+import config from '../../config/config';
 
 const BrochureModal = ({ unitId }: { unitId?: string }) => {
     const isOpen = useStore(state => state.isBrochureOpen);
@@ -33,6 +34,8 @@ const BrochureModal = ({ unitId }: { unitId?: string }) => {
 
     if (!isOpen) return null;
 
+    const buildingName = config.company?.buildingName || "Venecia";
+
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 md:p-8 bg-black/80 backdrop-blur-md animate-fade-in">
             <div className="bg-white w-full h-full max-w-6xl rounded-2xl shadow-2xl flex flex-col overflow-hidden relative">
@@ -40,12 +43,12 @@ const BrochureModal = ({ unitId }: { unitId?: string }) => {
                 {/* Header */}
                 <div className="bg-neutral-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-brand-gold flex items-center justify-center text-neutral-900">
+                        <div className="w-8 h-8 rounded-full bg-brand-orange flex items-center justify-center text-white">
                             <FileText size={18} />
                         </div>
                         <div>
                             <h2 className="text-lg font-medium tracking-wide">Brochure Digital</h2>
-                            <p className="text-xs text-gray-400">Showroom Virtual Santa Fe</p>
+                            <p className="text-xs text-gray-400">Showroom Virtual {buildingName}</p>
                         </div>
                     </div>
                     
@@ -53,7 +56,7 @@ const BrochureModal = ({ unitId }: { unitId?: string }) => {
                         {brochureUrl && (
                             <a 
                                 href={brochureUrl} 
-                                download="Showroom_SantaFe_Brochure.pdf"
+                                download={`Showroom_${buildingName}_Brochure.pdf`}
                                 className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white text-neutral-900 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gray-200 transition-colors"
                             >
                                 <Download size={16} />
@@ -73,7 +76,7 @@ const BrochureModal = ({ unitId }: { unitId?: string }) => {
                 <div className="flex-1 bg-neutral-200 relative flex items-center justify-center">
                     {isLoading || !brochureUrl ? (
                         <div className="flex flex-col items-center justify-center gap-2 text-neutral-500">
-                            <Loader2 className="w-8 h-8 animate-spin" />
+                            <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
                             <p>Cargando brochure...</p>
                         </div>
                     ) : (

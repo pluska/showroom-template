@@ -1,6 +1,6 @@
 "use server";
 
-import { getRequestContext } from "@cloudflare/next-on-pages";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { brochures } from "@/lib/db/schema";
 import { eq, isNull, desc, and } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 
 export async function getBrochures() {
-  const db = getDb();
+  const db = await getDb();
 
   const allBrochures = await db
     .select()
@@ -20,7 +20,7 @@ export async function getBrochures() {
 }
 
 export async function getActiveBrochure(unitId?: string) {
-  const db = getDb();
+  const db = await getDb();
 
   if (unitId) {
     const [unitBrochure] = await db
@@ -78,7 +78,7 @@ export async function uploadBrochure(formData: FormData) {
 
   let uploadedToR2 = false;
   try {
-    const env = getRequestContext().env as any;
+    const { env } = await getCloudflareContext({ async: true }) as any;
     if (env && env.R2) {
       const arrayBuffer = await file.arrayBuffer();
       await env.R2.put(url, arrayBuffer, {
@@ -104,7 +104,7 @@ export async function uploadBrochure(formData: FormData) {
     throw new Error("No se pudo subir a R2. Verifica tu configuración de Cloudflare Pages.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   // Check if there are any existing brochures for this type
   const existingBrochures = await getBrochures();
@@ -148,7 +148,7 @@ export async function setActiveBrochure(id: string) {
     throw new Error("Unauthorized: Solo administradores pueden cambiar el brochure activo.");
   }
 
-  const db = getDb();
+  const db = await getDb();
 
   const [targetBrochure] = await db.select().from(brochures).where(eq(brochures.id, id)).limit(1);
   if (!targetBrochure) throw new Error("Brochure no encontrado");
@@ -184,7 +184,7 @@ export async function deleteBrochure(id: string) {
     throw new Error("Unauthorized: Solo administradores pueden eliminar brochures.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   await db
     .update(brochures)
     .set({ deletedAt: new Date(), isActive: false, unitId: null })
@@ -201,7 +201,7 @@ export async function updateBrochure(id: string, formData: FormData) {
     throw new Error("Unauthorized: Solo administradores pueden actualizar brochures.");
   }
 
-  const db = getDb();
+  const db = await getDb();
   const [existingBrochure] = await db.select().from(brochures).where(eq(brochures.id, id)).limit(1);
   if (!existingBrochure) throw new Error("Brochure no encontrado.");
 
@@ -224,7 +224,7 @@ export async function updateBrochure(id: string, formData: FormData) {
 
     let uploadedToR2 = false;
     try {
-      const env = getRequestContext().env as any;
+      const { env } = await getCloudflareContext({ async: true }) as any;
       if (env && env.R2) {
         const arrayBuffer = await file.arrayBuffer();
         await env.R2.put(newUrl, arrayBuffer, {
