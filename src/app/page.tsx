@@ -42,7 +42,7 @@ const Homepage = () => {
 
       // Logo slides up when text is about to start
       .to(logoRef.current, {
-        y: '-25vh',
+        y: window.innerWidth < 600 ? '-14vh' : '-25vh',
         duration: 2,
         ease: "power3.inOut"
       }, "moveUp")

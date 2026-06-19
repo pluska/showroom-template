@@ -58,7 +58,7 @@ const MobileFloorNav = ({ currentFloorId }: MobileFloorNavProps) => {
 
             {/* Current Floor Label */}
             <div className="bg-gray-800/90 text-white font-bold text-lg rounded-xl h-12 w-12 flex items-center justify-center shadow-xl border border-white/10 pointer-events-auto">
-                {currentFloor.name}
+                {currentFloor.name.replace(/Piso\s+/gi, '')}
             </div>
 
             {/* Down Arrow */}

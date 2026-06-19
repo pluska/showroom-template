@@ -1,8 +1,11 @@
+"use client";
 import { useState, useEffect } from 'react';
 import { RotateCcw } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { useStore } from '../../store/useStore';
 
 const UseLandscape = () => {
+    const pathname = usePathname();
     const [isPortrait, setIsPortrait] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [showOverlay, setShowOverlay] = useState(false);
@@ -35,6 +38,13 @@ const UseLandscape = () => {
     }, []);
 
     useEffect(() => {
+        // Exclude dashboard and login routes
+        if (pathname?.startsWith('/dashboard') || pathname?.startsWith('/login')) {
+            setShowOverlay(false);
+            setForcedLandscape(false);
+            return;
+        }
+
         if (isMobile && isPortrait) {
             setShowOverlay(true);
             setForcedLandscape(false);
@@ -49,7 +59,7 @@ const UseLandscape = () => {
             setShowOverlay(false);
             setForcedLandscape(false);
         }
-    }, [isMobile, isPortrait, setForcedLandscape]);
+    }, [isMobile, isPortrait, setForcedLandscape, pathname]);
 
     if (!showOverlay) return null;
 

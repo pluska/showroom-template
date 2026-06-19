@@ -5,6 +5,8 @@ import "./globals.css";
 import config from "@/config/config";
 import StoreInitializer from "@/components/layout/StoreInitializer";
 import FloorEntryTransition from "@/components/layout/FloorEntryTransition";
+import UseLandscape from "@/components/layout/UseLandscape";
+import ForcedLandscapeWrapper from "@/components/layout/ForcedLandscapeWrapper";
 import { getFloorsData } from "@/app/actions/units";
 import { getBuildingFacesData } from "@/app/actions/building";
 import { type Floor } from "@/data/floors";
@@ -51,9 +53,11 @@ export default async function RootLayout({
         className={`${montserrat.variable} ${inter.variable} antialiased h-screen w-screen overflow-hidden bg-black text-white`}
       >
         <StoreInitializer initialFloorsData={floorsData} initialBuildingFacesData={buildingFacesData} />
-        <FloorEntryTransition />
-
-        {children}
+        <UseLandscape />
+        <ForcedLandscapeWrapper>
+          <FloorEntryTransition />
+          {children}
+        </ForcedLandscapeWrapper>
       </body>
     </html>
   );

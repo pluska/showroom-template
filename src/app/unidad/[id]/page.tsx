@@ -384,7 +384,7 @@ const UnitPage = () => {
                 {/* Badge - Visible when details hidden */}
                 {!showDetails && (
                     <div className="px-4 py-2 bg-neutral-600/90 backdrop-blur-sm text-white rounded-md shadow-lg text-xs font-medium tracking-wide">
-                        Planta {floor.name}
+                        Planta {floor.name.replace(/Piso\s+/gi, '')}
                     </div>
                 )}
             </div>
@@ -468,7 +468,7 @@ const UnitPage = () => {
                                     </li>
                                     <li className="flex flex-col items-center gap-2 text-neutral-700">
                                         <Bed strokeWidth={1.5} className="text-brand-gold" size={24} />
-                                        <span className="text-xs font-bold uppercase tracking-wider">{unit.bedrooms} Rec</span>
+                                        <span className="text-xs font-bold uppercase tracking-wider">{unit.bedrooms} Dorm</span>
                                     </li>
                                     <li className="flex flex-col items-center gap-2 text-neutral-700">
                                         <Bath strokeWidth={1.5} className="text-brand-gold" size={24} />
@@ -530,7 +530,7 @@ const UnitPage = () => {
                                     </li>
                                     <li className="flex items-center gap-4 text-neutral-700">
                                         <Bed strokeWidth={1.5} className="text-brand-gold" size={22} />
-                                        <span className="text-sm font-medium">{unit.bedrooms} Recámaras</span>
+                                        <span className="text-sm font-medium">{unit.bedrooms} Dormitorios</span>
                                     </li>
                                     <li className="flex items-center gap-4 text-neutral-700">
                                         <Bath strokeWidth={1.5} className="text-brand-gold" size={22} />
@@ -598,7 +598,7 @@ const UnitPage = () => {
                 {viewMode === 'tour' && (
                     <TourHeader
                         title={`Unidad ${unit.identifier || unit.id}`}
-                        subtitle={`${unit.subtitle || 'Unidad'} - Piso ${floor.name}`}
+                        subtitle={`${unit.subtitle || 'Unidad'} - Piso ${floor.name.replace(/Piso\s+/gi, '')}`}
                         onBack={() => handleViewChange('furnished')}
                     />
                 )}

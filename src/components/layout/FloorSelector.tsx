@@ -50,8 +50,7 @@ const FloorSelector = () => {
                                 }
                             `}
                         >
-                            <span className="md:hidden">Piso {floor.name}</span>
-                            <span className="hidden md:inline">{floor.name}</span>
+                            <span>{floor.name.replace(/Piso\s+/gi, '')}</span>
                         </button>
                     );
                 })}
