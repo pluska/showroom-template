@@ -117,6 +117,14 @@ export const apartmentTransition = (
 /** Área estándar de los departamentos en Olimpo de Tumbes: 50 m². */
 export const APARTMENT_AREA_SQM = 50;
 
+/**
+ * Programa estándar del departamento. Las cuatro tipologías lo comparten, así
+ * que vive aquí y no repetido en cada unidad: si una tipología futura difiere,
+ * es la unidad la que declara lo suyo y esto queda de valor por defecto.
+ */
+export const APARTMENT_BEDROOMS = 3;
+export const APARTMENT_BATHROOMS = 1;
+
 /** Enlace único oficial del recorrido virtual 360° en Kuula para todos los departamentos. */
 export const APARTMENT_TOUR_URL =
   'https://kuula.co/share/collection/7Tgw3?logo=-1&card=1&info=0&fs=1&vr=1&zoom=1&sd=1&initload=0&thumbs=3&inst=es';

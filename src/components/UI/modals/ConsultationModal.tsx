@@ -116,7 +116,7 @@ const ConsultationModal: React.FC<ConsultationModalProps> = ({ isOpen, onClose, 
                         <input 
                             type="text" 
                             required
-                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BFA07A]/50 focus:border-[#BFA07A] transition-all"
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange transition-all"
                             placeholder="Tu nombre"
                             value={formData.name}
                             onChange={e => setFormData({...formData, name: e.target.value})}
@@ -129,8 +129,8 @@ const ConsultationModal: React.FC<ConsultationModalProps> = ({ isOpen, onClose, 
                             <input 
                                 type="tel" 
                                 required
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BFA07A]/50 focus:border-[#BFA07A] transition-all"
-                                placeholder="+54 9 ..."
+                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange transition-all"
+                                placeholder="Tu número de contacto"
                                 value={formData.phone}
                                 onChange={e => setFormData({...formData, phone: e.target.value})}
                             />
@@ -139,7 +139,7 @@ const ConsultationModal: React.FC<ConsultationModalProps> = ({ isOpen, onClose, 
                             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Email</label>
                             <input 
                                 type="email" 
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BFA07A]/50 focus:border-[#BFA07A] transition-all"
+                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange transition-all"
                                 placeholder="tu@email.com"
                                 value={formData.email}
                                 onChange={e => setFormData({...formData, email: e.target.value})}
@@ -151,7 +151,7 @@ const ConsultationModal: React.FC<ConsultationModalProps> = ({ isOpen, onClose, 
                         <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Mensaje</label>
                         <textarea 
                             rows={3}
-                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#BFA07A]/50 focus:border-[#BFA07A] transition-all resize-none"
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-orange/50 focus:border-brand-orange transition-all resize-none"
                             placeholder="Estoy interesado en esta unidad..."
                             value={formData.message}
                             onChange={e => setFormData({...formData, message: e.target.value})}

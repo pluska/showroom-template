@@ -108,7 +108,17 @@ for (const floor of floorsData) {
   }
 }
 
-fs.writeFileSync('seed.sql', sql);
-fs.writeFileSync('src/lib/db/seed.sql', sql);
-console.log('Generated seed.sql and src/lib/db/seed.sql from src/data/floors.ts');
-console.log('seed.sql generated!');
+// Una sola copia, la que ejecutan los scripts db:seed:* de package.json.
+// Antes se escribían dos (esta y una en la raíz) y divergían en cuanto
+// alguien editaba una a mano: quedaban dos semillas con el mismo aspecto y
+// distinto contenido, y la de la raíz era la más fácil de correr por error.
+const HEADER = `-- ARCHIVO GENERADO por generate-seed.mjs a partir de src/data/floors.ts.
+-- No editar a mano: el próximo \`node generate-seed.mjs\` lo pisa.
+-- Se ejecuta con \`npm run db:seed:legacy\` (ojo con el nombre: siembra el
+-- inventario que describa floors.ts, que hoy sigue siendo el de Océano
+-- Atlántico). Para dejar la base usable basta con los usuarios.
+
+`;
+
+fs.writeFileSync('src/lib/db/seed.sql', HEADER + sql);
+console.log('Generado src/lib/db/seed.sql desde src/data/floors.ts');

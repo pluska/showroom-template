@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "assets:bump": "node scripts/bump-asset-version.mjs",
     "build:worker": "opennextjs-cloudflare build && cp .open-next/worker.js .open-next/assets/_worker.js && cp -r .open-next/cloudflare .open-next/assets/cloudflare && cp -r .open-next/middleware .open-next/assets/middleware && cp -r .open-next/server-functions .open-next/assets/server-functions && cp -r .open-next/.build .open-next/assets/.build && node patch-worker.mjs",
     "pages:build": "npm run build:worker",
     "db:generate": "drizzle-kit generate",

@@ -6,10 +6,11 @@ import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { floorsData as staticFloorsData } from "@/data/floors";
-import { lotBlocks, lotUnits } from "@/data/urbanization/lots";
+import { LOT_DEFAULT_AREA_SQM, lotBlocks, lotUnits } from "@/data/urbanization/lots";
 import { towers } from "@/data/urbanization/towers";
 import { APARTMENT_AREA_SQM, APARTMENT_TOUR_URL } from "@/data/urbanization/apartments";
-import { ZoneId, TowerId, UnitStatus, LotPosition, TowerFloorKind } from "@/data/urbanization/enums";
+import { TowerLabel, ZoneInventoryNote, ZoneLabel } from "@/data/urbanization/enums";
+import { ZoneId, UnitStatus, LotPosition, TowerFloorKind } from "@/data/urbanization/enums";
 import { lotPlanImage, lotMeasuredPlanImage } from "@/data/urbanization/assets";
 import { getAssetUrl } from "@/utils/assets";
 
@@ -464,7 +465,14 @@ export async function getLogs() {
 
 export interface UrbanizationUnit {
   id: string;
-  zoneId: "zone-1" | "zone-2" | "zone-3";
+  /**
+   * La zona a la que pertenece la unidad. Es `ZoneId`, no una unión de tres
+   * literales: sumar una zona al proyecto no debería obligar a editar este
+   * tipo. `null` cuando la manzana todavía no tiene zona asignada — esas
+   * unidades no salen bajo ninguna pestaña del panel, igual que antes, pero
+   * ahora se dicen en vez de colarse bajo una zona equivocada.
+   */
+  zoneId: ZoneId | null;
   zoneName: string;
   kind: "lot" | "apartment";
 
@@ -499,6 +507,18 @@ export interface UrbanizationUnit {
   updatedAt?: Date | null;
 }
 
+/**
+ * Nombre de zona para el inventario: el del catálogo más, si lo hay, el matiz
+ * que distingue una zona de otra en el panel. Antes esto era una cadena de
+ * ternarios con los nombres escritos a mano, que además daba por hecho que las
+ * zonas con lotes eran exactamente dos.
+ */
+const zoneInventoryName = (zoneId: ZoneId | undefined): string => {
+  if (!zoneId) return "Sin zona asignada";
+  const note = ZoneInventoryNote[zoneId];
+  return note ? `${ZoneLabel[zoneId]} (${note})` : ZoneLabel[zoneId];
+};
+
 export async function getUrbanizationUnitsData(): Promise<UrbanizationUnit[]> {
   const db = await getDb();
   const dbUnits = await db
@@ -511,8 +531,10 @@ export async function getUrbanizationUnitsData(): Promise<UrbanizationUnit[]> {
 
   // 1. Manzanas y Lotes (Zona 1 y Zona 2 - 133 lotes)
   lotBlocks.forEach((block) => {
-    const zoneId = block.zoneId === ZoneId.ZONE_1 ? "zone-1" : "zone-2";
-    const zoneName = block.zoneId === ZoneId.ZONE_1 ? "Zona 1 (Lotes Oeste)" : "Zona 2 (Lotes Este)";
+    // Sale de la manzana, no de un ternario: añadir una tercera zona con lotes
+    // ya no exige tocar esto.
+    const zoneId = block.zoneId ?? null;
+    const zoneName = zoneInventoryName(block.zoneId);
 
     block.lots.forEach((lotNumber, index) => {
       const unitId = `lot:${block.id}-${lotNumber}`;
@@ -544,7 +566,7 @@ export async function getUrbanizationUnitsData(): Promise<UrbanizationUnit[]> {
         code: `Mz. ${block.letter} Lt. ${String(lotNumber).padStart(2, "0")}`,
         identifier: `Lote ${lotNumber}`,
         type: "Lote / Terreno",
-        areaSqm: dbRecord?.areaSqm || staticUnit?.areaSqm || 66,
+        areaSqm: dbRecord?.areaSqm || staticUnit?.areaSqm || LOT_DEFAULT_AREA_SQM,
         state,
         buyerName: dbRecord?.buyerName || null,
         planImage: cleanImg ? getAssetUrl(cleanImg) : null,
@@ -556,7 +578,10 @@ export async function getUrbanizationUnitsData(): Promise<UrbanizationUnit[]> {
 
   // 2. Torres A, B, C (Zona 3 - 60 departamentos + 3 terrazas)
   towers.forEach((tower) => {
-    const towerName = tower.id === TowerId.TOWER_A ? "Torre A" : tower.id === TowerId.TOWER_B ? "Torre B" : "Torre C";
+    // Del catálogo de etiquetas y de la zona que declara la propia torre: una
+    // cuarta torre, o un cambio de nombre, ya no pasa por aquí.
+    const towerName = TowerLabel[tower.id];
+    const towerZoneName = zoneInventoryName(tower.zoneId);
 
     tower.floors.forEach((floor) => {
       const isTerrace = floor.kind === TowerFloorKind.TERRACE;
@@ -573,8 +598,8 @@ export async function getUrbanizationUnitsData(): Promise<UrbanizationUnit[]> {
 
         results.push({
           id: unitId,
-          zoneId: "zone-3",
-          zoneName: "Zona 3 (Torres Olimpo)",
+          zoneId: tower.zoneId,
+          zoneName: towerZoneName,
           kind: "apartment",
           towerId: tower.id,
           towerName,
@@ -586,8 +611,8 @@ export async function getUrbanizationUnitsData(): Promise<UrbanizationUnit[]> {
           identifier: unit.identifier,
           type: isTerrace ? "Área Común" : "Departamento Flat",
           areaSqm: dbRecord?.areaSqm || unit.areaSqm || APARTMENT_AREA_SQM,
-          bedrooms: unit.bedrooms || 3,
-          bathrooms: unit.bathrooms || 1,
+          bedrooms: unit.bedrooms,
+          bathrooms: unit.bathrooms,
           state,
           buyerName: dbRecord?.buyerName || null,
           tourUrl: unit.tourUrl || APARTMENT_TOUR_URL,

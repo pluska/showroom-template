@@ -26,7 +26,7 @@ documentación del modelo:
 | [docs/00-ESTRUCTURA.md](./docs/00-ESTRUCTURA.md) | Modelo de dominio, jerarquía y enums |
 | [docs/01-NAVEGACION.md](./docs/01-NAVEGACION.md) | Flujo y reglas de desplazamiento |
 | [docs/02-ASSETS.md](./docs/02-ASSETS.md) | Nomenclatura de archivos y claves R2 |
-| [docs/03-SCHEMA-DB.md](./docs/03-SCHEMA-DB.md) | Esquema D1 propuesto para el inmueble |
+| [docs/03-SCHEMA-DB.md](./docs/03-SCHEMA-DB.md) | Qué vive en código y qué en D1, y por qué |
 | [docs/04-PENDIENTES.md](./docs/04-PENDIENTES.md) | Supuestos del modelo y decisiones abiertas |
 | [docs/05-PLANTILLA.md](./docs/05-PLANTILLA.md) | Qué es genérico y qué se rellena por proyecto |
 | [STRUCTURE.md](./STRUCTURE.md) | Arquitectura y organización de archivos |

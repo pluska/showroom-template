@@ -4,10 +4,24 @@
 // Se rellena con NEXT_PUBLIC_R2_PUBLIC_URL en .env, no aquí.
 const DEFAULT_R2_PUBLIC_URL = '';
 const ASSET_BASE_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || DEFAULT_R2_PUBLIC_URL;
-// Sube cada vez que se reemplaza el CONTENIDO de una clave que YA estaba en el
-// bucket: la URL no cambia, así que sin esto el navegador seguiría sirviendo la
-// copia vieja. Convención: v=<AAAAMMDD>-<n>.
-const ASSET_VERSION = 'v=20260101-1';
+// Rompe la caché del navegador cuando se reemplaza el CONTENIDO de una clave
+// que YA estaba en el bucket: la URL no cambia, así que sin esto el visitante
+// seguiría viendo la copia vieja.
+//
+// NO se edita a mano — es justo el paso que se olvida, y el fallo resultante
+// (el cliente ve la imagen anterior) no se distingue de un problema de caché
+// suyo. Se sube con:
+//
+//     npm run assets:bump
+//
+// que reescribe la constante de abajo con la fecha de hoy. NEXT_PUBLIC_ASSET_VERSION
+// la pisa desde el entorno, para romper la caché en un despliegue sin tocar código.
+//
+// La versión es GLOBAL: al subirla se revalida todo el media, no solo lo que
+// cambió. Es el precio de tener un solo número; la alternativa —claves con
+// hash del contenido— exige rehacer el pipeline de subida a R2.
+const DEFAULT_ASSET_VERSION = '20260101-1'; // gestionado por scripts/bump-asset-version.mjs
+const ASSET_VERSION = `v=${process.env.NEXT_PUBLIC_ASSET_VERSION || DEFAULT_ASSET_VERSION}`;
 
 
 export const getAssetUrl = (path: string): string => {

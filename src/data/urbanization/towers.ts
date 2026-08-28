@@ -19,7 +19,13 @@
 // Nada de esto está codificado con "3 torres": todo sale de `order`.
 // ============================================================================
 
-import { APARTMENT_AREA_SQM, APARTMENT_TOUR_URL, apartmentTypeForUnitNumber } from './apartments';
+import {
+  APARTMENT_AREA_SQM,
+  APARTMENT_BATHROOMS,
+  APARTMENT_BEDROOMS,
+  APARTMENT_TOUR_URL,
+  apartmentTypeForUnitNumber,
+} from './apartments';
 import { apartmentGalleryImage, towerEntryVideo, towerFacadeImage, towerFloorPlanImage } from './assets';
 import { TowerFloorKind, TowerFloorKindLabel, TowerId, UnitKind, UnitStatus, ZoneId } from './enums';
 import type { Tower, TowerFloor, Unit, ZoneElementHotspot } from './types';
@@ -51,7 +57,10 @@ export const TOWER_ENTRY_LEVEL = 5;
 export const towersOrder: TowerId[] = [TowerId.TOWER_A, TowerId.TOWER_B, TowerId.TOWER_C];
 
 /** Elemento de la Zona 2 que agrupa a las tres torres. */
-export const TOWERS_ELEMENT_ID = 'f1-z2-torres';
+// Debe coincidir con el elemento declarado en `zones.ts`, que es el que la
+// navegación hace clicable. Estuvo desincronizado ('f1-z2-torres' aquí,
+// 'f1-z3-torres' allá) sin que se notara porque nadie leía este campo.
+export const TOWERS_ELEMENT_ID = 'f1-z3-torres';
 
 /**
  * Áreas clicables sobre `ABC.webp`, medidas sobre la propia imagen: las tres
@@ -173,8 +182,8 @@ const buildUnits = (towerId: TowerId, floorId: string, level: number): Unit[] =>
       // planta, no de la torre ni del piso (ver `apartments.ts`).
       apartmentTypeId: apartmentTypeForUnitNumber(number) ?? undefined,
       areaSqm: APARTMENT_AREA_SQM,
-      bedrooms: 3,
-      bathrooms: 1,
+      bedrooms: APARTMENT_BEDROOMS,
+      bathrooms: APARTMENT_BATHROOMS,
       subtitle: 'Flat',
       tourUrl: APARTMENT_TOUR_URL,
       x,
@@ -212,7 +221,7 @@ export const floorTitle = (floor: TowerFloor): string =>
 
 export const towers: Tower[] = towersOrder.map((id, order) => ({
   id,
-  zoneId: ZoneId.ZONE_2,
+  zoneId: ZoneId.ZONE_3,
   elementId: TOWERS_ELEMENT_ID,
   order,
   facadeImage: towerFacadeImage(id),

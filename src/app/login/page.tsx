@@ -37,8 +37,8 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center bg-[#0d1527] overflow-hidden font-secondary">
       {/* Background Decorative Blur Orbs */}
-      <div className="absolute top-1/4 left-1/4 w-72 md:w-96 h-72 md:h-96 rounded-full bg-[#1F3D64]/30 blur-[80px] md:blur-[120px] pointer-events-none animate-pulse"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-72 md:w-96 h-72 md:h-96 rounded-full bg-[#F59C1D]/10 blur-[80px] md:blur-[120px] pointer-events-none animate-pulse"></div>
+      <div className="absolute top-1/4 left-1/4 w-72 md:w-96 h-72 md:h-96 rounded-full bg-brand-primary/30 blur-[80px] md:blur-[120px] pointer-events-none animate-pulse"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-72 md:w-96 h-72 md:h-96 rounded-full bg-brand-orange/10 blur-[80px] md:blur-[120px] pointer-events-none animate-pulse"></div>
 
       {/* Grid Pattern overlay for depth */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff02_1px,transparent_1px),linear-gradient(to_bottom,#ffffff02_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none"></div>

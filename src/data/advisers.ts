@@ -32,36 +32,18 @@ export interface AdviserData {
 const message = `Hola, vengo desde la web de ${config.company.buildingName}, deseo más información.`;
 
 export const advisersData: AdviserData[] = [
+  // PLANTILLA — RELLENAR. Un asesor por canal de venta; se recorren siempre,
+  // así que el array puede tener uno o siete. Con el array vacío, el bloque de
+  // asesores no se pinta.
+  //
+  // `logo` es una ruta bajo public/ (ver public/README.md) y `phone` va en
+  // formato internacional sin espacios: es lo que se le pasa a wa.me.
   {
-    id: 'oi-diamante-olimpo',
-    name: 'OI Diamante / Olimpo',
-    role: 'Canal de venta del proyecto',
-    logo: '/identity/olimpo/logo.png',
-    phone: '+51908922045',
-    whatsappMessage: message,
-  },
-  {
-    id: 'oi-tumbes',
-    name: 'OI Tumbes',
-    role: 'Soluciones Inmobiliarias',
-    logo: '/identity/titanes/soluciones.png',
-    phone: '+51938562802',
-    whatsappMessage: message,
-  },
-  {
-    id: 'titan',
-    name: 'Titán',
-    role: 'Titán Inmobiliaria',
-    logo: '/identity/titanes/titan.png',
-    phone: '+51953767985',
-    whatsappMessage: message,
-  },
-  {
-    id: 'titanio',
-    name: 'Titanio',
-    role: 'Titanio',
-    logo: '/identity/titanes/titanio.png',
-    phone: '+51966470254',
+    id: 'canal-1',
+    name: 'RELLENAR Nombre',
+    role: 'RELLENAR Canal de venta',
+    logo: '/identity/realstate/logo.png',
+    phone: '+00000000000',
     whatsappMessage: message,
   },
 ];

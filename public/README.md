@@ -12,10 +12,12 @@ navegador necesita antes de que el bucket entre en juego.
 |---|---|---|
 | `identity/project/` | `logo.png`, `logo-white.png` del proyecto | `config.logos` |
 | `identity/realstate/` | `logo.png`, `logo-white.png` de la inmobiliaria, más un archivo por empresa del grupo | `config.logos`, `config.company.realStateMembers` |
-| `icons/` | Íconos de los POI del mapa, agrupados por categoría (`FINANZAS/`, `COMERCIO/`, `EDUCACION/`…) | `src/data/*_locations.json` |
-| `building/` | Fachada de referencia del módulo "El Edificio" | `src/data/buildingData.ts` |
-| `amenities/` | Portadas de amenidades que se muestran antes de cargar R2 | `src/data/urbanization/amenities-tab.ts` |
-| `homepage/` | Póster de la portada, si no se sirve desde R2 | `src/data/homepage.ts` |
+| `icons/` | Íconos de los POI del mapa, agrupados por categoría (`FINANZAS/`, `COMERCIO/`, `EDUCACION/`…), más el emblema del pin del proyecto | `src/data/*_locations.json`, `config.logos.mapPin` |
+
+Y nada más. Todo lo demás —tomas, renders, planos, videos, portadas de
+amenidades, póster de la home— se sirve desde R2 con `getAssetUrl()`. Si te
+encuentras añadiendo una carpeta aquí para media del proyecto, casi seguro que
+va al bucket.
 
 ## Las variantes `-white`
 

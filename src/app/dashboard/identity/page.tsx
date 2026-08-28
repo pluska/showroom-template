@@ -1,4 +1,5 @@
 import { getSetting } from "@/app/actions/settings";
+import config from "@/config/config";
 import { auth } from "@/auth";
 import IdentityForm from "@/components/dashboard/identity/IdentityForm";
 import { Palette } from "lucide-react";
@@ -17,8 +18,8 @@ export default async function IdentityPage() {
   }
 
   const identityConfig = await getSetting("identity") || {
-    primaryColor: "#F59C1D",
-    secondaryColor: "#1F3D64",
+    primaryColor: config.colors.accent,
+    secondaryColor: config.colors.main,
     typography: "Inter",
     contactEmail: "",
     contactPhone: "",

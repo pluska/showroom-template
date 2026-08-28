@@ -23,6 +23,11 @@ export interface ConfigProps {
     projectWhite: string;
     realState: string;
     realStateWhite: string;
+    /**
+     * Emblema cuadrado para el pin del mapa. El logotipo largo, metido en un
+     * círculo de 80 px, no se lee. Si no se declara, se usa `project`.
+     */
+    mapPin?: string;
   };
   auth: {
     loginUrl: string;

@@ -31,6 +31,13 @@ When modifying or expanding this project, AI agents MUST adhere to the following
 - Keep configuration in `data/`.
 - If adding a new feature, ensure it can be toggled or configured via a data file so the template remains reusable for other projects.
 
+## 3.5 Versión de assets
+- Si reemplazas en R2 el CONTENIDO de una clave que ya existía, corre
+  `npm run assets:bump`. La URL no cambia, así que sin eso el visitante sigue
+  viendo la copia vieja y el fallo parece un problema de caché suyo.
+- Si solo subes claves NUEVAS, no hace falta: nadie las tenía cacheadas.
+- **NUNCA** edites `DEFAULT_ASSET_VERSION` a mano.
+
 ## 4. Asset Manifest Management
 - Any new critical asset (Intro videos, main face backgrounds) should be added to the example list in `src/data/asset-manifest.ts` or documented as a requirement.
 

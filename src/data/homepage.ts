@@ -1,3 +1,5 @@
+import config from "@/config/config";
+
 export interface HomepageData {
   hero: {
     logo: string;
@@ -16,7 +18,7 @@ export interface HomepageData {
 
 export const homepageData: HomepageData = {
   hero: {
-    logo: "/identity/olimpo/logo-white.png",
+    logo: config.logos.projectWhite,
     button: "Entrar"
   },
   intro: {

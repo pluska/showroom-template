@@ -1,17 +1,59 @@
-# Propuesta de esquema de base de datos (D1)
+# Dónde vive el inmueble: código o base de datos
 
-> **Estado: propuesta.** Todavía no se ha tocado `src/lib/db/schema.ts` ni se ha
-> generado ninguna migración. Este documento es el paso intermedio entre la
-> estructura en código (`src/data/urbanization/`) y las tablas reales, para
-> revisarlo antes de escribir migraciones.
+> **Estado: decidido.** Este documento empezó como propuesta de migrar toda la
+> urbanización a D1. La decisión fue la contraria y está tomada: **la estructura
+> se queda en código y en D1 vive solo lo que cambia solo.** Lo que sigue es la
+> frontera, el porqué, y el esquema que se propuso —conservado como referencia
+> por si algún día un proyecto justifica cruzarla.
 
-La base heredada de Océano Atlántico ya trae `users`, `appointments`,
-`prospects`, `media`, `brochures`, `tours`, `gallery_collections`,
-`locations_poi`, `logs`, `page_views`, `global_settings` y el módulo de
-contenido social. **Todo eso se conserva tal cual.** Lo que cambia es la parte
-que describe el inmueble.
+## 0. La decisión
+
+| Qué | Dónde vive | Por qué |
+|---|---|---|
+| Fases, zonas, cuadrícula, manzanas, torres, pisos | `src/data/urbanization/` | Es geometría atada a las imágenes |
+| Polígonos (`path`), hotspots, coordenadas | `src/data/urbanization/` | Se trazan con `PathBuilder` sobre una toma concreta |
+| Etiquetas visibles | `enums.ts`, catálogos `*Label` | Cambian a menudo, pero las cambia quien despliega |
+| Estado comercial, comprador, área, galería por unidad | D1, tabla `units` | Lo edita el cliente a diario desde el panel |
+| Citas, prospectos, media, brochures, tours, POIs, logs | D1 | Igual: contenido vivo |
+
+La razón de fondo: **la estructura no puede cambiar sin un despliegue de todos
+modos.** Una manzana nueva llega junto con su render, su recorte y su polígono;
+subir la toma a R2 y trazar el polígono ya obliga a pasar por el repositorio. Una
+tabla `zones` en D1 no ahorraría ese paso, y a cambio partiría en dos la fuente de
+verdad de la geometría.
+
+Lo que sí edita el cliente todos los días —marcar un lote como vendido, poner el
+nombre del comprador, corregir un área— ya está en D1.
+
+## 1. Cómo se juntan las dos mitades
+
+`getUrbanizationUnitsData()` (`src/app/actions/units.ts`) es la costura: recorre
+el catálogo declarado en `src/data/urbanization/` y le superpone la fila de
+`units` cuando existe. La fila se crea **sola, la primera vez que alguien cambia
+algo** desde el panel (`updateUrbanizationUnitState`), así que la base no
+arranca con 193 filas muertas: solo guarda las unidades que se apartaron del
+valor por defecto.
+
+Por eso `units.floor_id` **no es una clave foránea**. Ahí caben ids de tres
+sistemas distintos (`floor_1`, `mz-o`, `tower-a:floor-3`) y solo el primero
+existe como fila en `floors`.
+
+## 2. Lo que falta para cerrar la frontera
+
+- **El panel todavía nombra las zonas en su UI.** `UnitsDashboard` tiene tres
+  pestañas escritas a mano (`zone-1`, `zone-2`, `zone-3`) con un juego de
+  filtros distinto para lotes y para torres. La consulta ya no asume cuántas
+  zonas hay; la pestaña sí. Es el siguiente paso, y es trabajo de UI.
+- **`ZoneInventoryNote`** (en `enums.ts`) es el matiz que distingue las zonas en
+  el inventario. Al añadir una zona con producto vendible, va ahí.
 
 ---
+
+# Anexo: el esquema que se propuso
+
+Lo que sigue es el diseño completo de tablas por si un proyecto futuro necesita
+que el cliente edite la estructura desde el panel. **No está implementado ni hay
+migración**; se conserva porque el trabajo de modelado ya estaba hecho.
 
 ## 1. Qué se reemplaza
 

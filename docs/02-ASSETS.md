@@ -462,3 +462,35 @@ cwebp -q 82 -m 6 -mt -resize 3840 2160 "3. PLANTAS EL EDIFICIO/A1.png" -o A1.web
 
 De 430 MB en PNG a 13 MB en WebP. Los tres videos de acercamiento
 (1920×1080, ~2,2 s, ~3 MB) se subieron tal cual, sin recomprimir.
+
+---
+
+## Romper la caché al reemplazar un asset
+
+Las claves de R2 son estables: `urbanization/phases/phase-1/zone-1.webp` sigue
+llamándose igual después de que el cliente mande una toma nueva. La URL no
+cambia, así que el navegador del visitante sigue sirviendo la copia anterior.
+
+`getAssetUrl()` añade a cada URL un sufijo `?v=<versión>`. Al subir esa versión,
+todas las URLs cambian y el navegador vuelve a pedir el archivo.
+
+```bash
+npm run assets:bump
+```
+
+**Cuándo se corre:** después de reemplazar el contenido de una clave que ya
+existía en el bucket.
+
+**Cuándo NO hace falta:** si solo se subieron claves nuevas — nadie las tenía
+cacheadas.
+
+La versión es **global**: al subirla se revalida todo el media, no solo lo que
+cambió. Es el precio de tener un solo número, y por eso conviene agrupar los
+reemplazos de una entrega y hacer un solo bump al final.
+
+`NEXT_PUBLIC_ASSET_VERSION` pisa el valor desde el entorno, para romper la
+caché en un despliegue sin tocar código.
+
+> Nunca edites `DEFAULT_ASSET_VERSION` a mano en `src/utils/assets.ts`: ese es
+> exactamente el paso que se olvida, y el fallo que produce —el cliente ve la
+> imagen anterior— no se distingue de un problema de caché suyo.

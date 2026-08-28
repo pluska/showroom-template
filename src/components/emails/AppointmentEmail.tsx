@@ -284,13 +284,13 @@ const columnValue = {
 };
 
 const link = {
-  color: '#F59C1D',
+  color: config.colors.accent,
   textDecoration: 'underline',
 };
 
 const linkButton = {
   color: '#ffffff',
-  backgroundColor: '#F59C1D',
+  backgroundColor: config.colors.accent,
   padding: '8px 14px',
   borderRadius: '4px',
   textDecoration: 'none',

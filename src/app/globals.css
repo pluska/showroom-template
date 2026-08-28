@@ -108,10 +108,10 @@
 .h-app { height: var(--app-h); }
 
 @theme {
-  /* Paleta de Olimpo: azul marino y dorado, muestreados del logotipo
-     `public/identity/olimpo/logo.png` (#233D78 y #D69135).
-     Si el cliente entrega un manual de marca con los hex oficiales, se
-     corrigen aquí y en `config.colors` — no hay que tocar ni un componente.
+  /* Estos dos valores son solo el RESPALDO del primer pintado: la fuente de
+     verdad es `config.colors`, que layout.tsx inyecta en :root y pisa lo de
+     aquí. Para cambiar la marca se toca config.ts y nada más — no hace falta
+     mantener los hex de abajo en sincronía, aunque conviene por coherencia.
 
      Los NOMBRES de los tokens (`brand-orange`, `ocean-*`) son herencia de
      Océano Atlántico y ya no describen su color: los usan ~400 clases en toda

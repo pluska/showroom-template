@@ -87,6 +87,13 @@ const range = (from: number, to: number, skip: number[] = []): number[] =>
  * correspondencia fuese otra, los quince códigos saldrían mal — y un código de
  * lote es dato de contrato.
  */
+/**
+ * Área del lote tipo. Es el respaldo para un lote sin medida declarada: el
+ * panel lo usaba como literal suelto (`|| 66`), que es la clase de número que
+ * sobrevive intacto a un cambio de proyecto.
+ */
+export const LOT_DEFAULT_AREA_SQM = 66;
+
 export const lotBlocks: LotBlock[] = [
   // Zona 2
   {

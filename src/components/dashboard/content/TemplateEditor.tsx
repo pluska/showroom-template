@@ -5,6 +5,7 @@ import { Stage, Layer, Image as KonvaImage, Text, Rect, Transformer, Group, Circ
 import useImage from "use-image";
 import { Trash2, Plus, Type, Check, RefreshCw, Layers, ArrowUp, Save, ImageOff, LayoutTemplate } from "lucide-react";
 import { getCanvasImageUrl } from "@/utils/assets";
+import config from "@/config/config";
 import { createCanvasTemplate, CanvasTemplateLayout } from "@/app/actions/templates";
 import MediaSidebar from "./MediaSidebar";
 
@@ -727,7 +728,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
               <label className="text-xs font-semibold text-gray-500">Color del texto:</label>
               <div className="flex items-center gap-3">
                 {[
-                  { name: "Naranja", hex: "#F59C1D" },
+                  { name: "Marca", hex: config.colors.accent },
                   { name: "Blanco", hex: "#FFFFFF" },
                   { name: "Amarillo", hex: "#FAE200" },
                   { name: "Negro", hex: "#111111" }
@@ -782,7 +783,7 @@ const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   step={1}
                   value={Math.round(selectedText.fontSize * 3)}
                   onChange={(e) => handleFontSizeSet(Number(e.target.value))}
-                  className="range range-xs [--range-shdw:#F59C1D] flex-1"
+                  className="range range-xs [--range-shdw:var(--color-brand-orange)] flex-1"
                 />
                 <div className="flex items-center gap-1 shrink-0">
                   <input

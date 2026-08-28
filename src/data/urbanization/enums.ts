@@ -295,6 +295,18 @@ export const ZoneLabel: Record<ZoneId, string> = {
 };
 
 /** Si mañana son "Lado Norte", "Noroeste", etc., se cambia AQUÍ y en ningún otro sitio. */
+/**
+ * Qué contiene cada zona, para el inventario del panel. `ZoneLabel` da el
+ * nombre corto que ve el visitante ("Zona 3"); esto es el matiz que necesita
+ * quien administra ("Zona 3 (Torres)") y que antes estaba escrito a mano
+ * dentro de la consulta. Una zona sin entrada sale solo con su nombre.
+ */
+export const ZoneInventoryNote: Partial<Record<ZoneId, string>> = {
+  [ZoneId.ZONE_1]: 'Lotes Oeste',
+  [ZoneId.ZONE_2]: 'Lotes Este',
+  [ZoneId.ZONE_3]: 'Torres',
+};
+
 export const SideLabel: Record<SideId, string> = {
   [SideId.SIDE_0]: 'Portada',
   [SideId.SIDE_1]: 'Lado 1',

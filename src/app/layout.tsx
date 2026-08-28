@@ -50,6 +50,16 @@ export default async function RootLayout({
     <html lang="es" data-theme="light">
       <head>
         <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
+        {/*
+          Los colores de marca se declaraban en dos sitios —`config.colors` y el
+          bloque @theme de globals.css— y nada obligaba a que coincidieran: al
+          cambiar uno, el otro se quedaba atrás en silencio. Aquí `config.colors`
+          gana. Las utilidades de Tailwind compilan a `var(--color-brand-*)`, así
+          que pisar la variable en :root las redirige TODAS (~400 clases) sin
+          tocar un componente. Los valores de globals.css quedan de respaldo para
+          el primer pintado.
+        */}
+        <style>{`:root{--color-brand-primary:${config.colors.main};--color-brand-orange:${config.colors.accent};}`}</style>
       </head>
       <body
         className={`${montserrat.variable} ${inter.variable} antialiased h-screen w-screen overflow-hidden bg-base-100 text-base-content`}

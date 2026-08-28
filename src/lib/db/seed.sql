@@ -1,8 +1,9 @@
--- ⚠️ HEREDADO DE OCÉANO ATLÁNTICO — no correr contra la base de Olimpo.
--- Este archivo siembra el inventario de aquel proyecto: 10 departamentos en
--- 6 pisos + 2 sótanos, con sus tours de Kuula y rutas de imágenes. Se conserva
--- sólo como referencia del formato hasta que exista el inventario de Olimpo.
--- Para dejar la base usable basta con los usuarios: `npm run db:seed:users`.
+-- ARCHIVO GENERADO por generate-seed.mjs a partir de src/data/floors.ts.
+-- No editar a mano: el próximo `node generate-seed.mjs` lo pisa.
+-- Se ejecuta con `npm run db:seed:legacy` (ojo con el nombre: siembra el
+-- inventario que describa floors.ts, que hoy sigue siendo el de Océano
+-- Atlántico). Para dejar la base usable basta con los usuarios.
+
 DELETE FROM tours;
 UPDATE page_views SET unit_id = NULL WHERE unit_id IS NOT NULL;
 DELETE FROM units;

@@ -2,12 +2,14 @@
 
 Utilidades del proyecto y **parches puntuales** de base de datos.
 
-`hash-password.mjs` es la única que viene en la plantilla, porque es la única
-que sirve igual en cualquier proyecto:
+Las dos que vienen en la plantilla sirven igual en cualquier proyecto:
 
 ```bash
-node scripts/hash-password.mjs 'la-contraseña'
+node scripts/hash-password.mjs 'la-contraseña'   # hash bcrypt para sembrar un usuario
+npm run assets:bump                              # rompe la caché tras reemplazar un asset en R2
 ```
+
+El resto de este directorio es de cada proyecto.
 
 ## La convención para el resto
 

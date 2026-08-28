@@ -114,9 +114,15 @@ La nomenclatura del cliente **nunca** se parsea en código: se traduce una sola
 vez al subir, a los slugs estables del dominio. La tabla de equivalencias y la
 estructura de claves están en [docs/02-ASSETS.md](./docs/02-ASSETS.md).
 
-`src/utils/assets.ts` expone `ASSET_VERSION`: **súbela cada vez que reemplaces
-el contenido de una clave que ya existía** en el bucket. La URL no cambia, así
-que sin eso el navegador sigue sirviendo la copia vieja.
+Cuando reemplaces el contenido de una clave que **ya existía** en el bucket,
+sube la versión de assets:
+
+```bash
+npm run assets:bump
+```
+
+La URL no cambia al reemplazar el archivo, así que sin eso el visitante sigue
+viendo la copia vieja. Si solo subes claves nuevas, no hace falta.
 
 ## 7. Verificar
 

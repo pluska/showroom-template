@@ -114,6 +114,7 @@ import {
 } from '@/data/urbanization/lots';
 import { viewpointHeading, viewpointsOfZone } from '@/data/urbanization/viewpoints';
 import type { Phase, Side, Tower, Unit, Zone, ZoneCoords } from '@/data/urbanization/types';
+import config from "@/config/config";
 
 /**
  * Proporción de las tomas de zona (3840 × 2160). Solo se usa para enderezar el
@@ -291,16 +292,16 @@ const Cara0Step = ({ onEnterSides }: { onEnterSides: () => void }) => {
       {!isTransitioning && (
         <div className="absolute right-[6%] sm:right-[10%] lg:right-[14%] top-1/2 -translate-y-1/2 z-20 flex flex-col items-center gap-6 lg:gap-8 max-w-xs sm:max-w-md lg:max-w-xl animate-in fade-in slide-in-from-right duration-700">
           <img
-            src="/identity/olimpo/logo.png"
-            alt="El Olimpo de Tumbes"
+            src={config.logos.project}
+            alt={config.appName}
             className="w-72 sm:w-[416px] lg:w-[500px] object-contain drop-shadow-2xl opacity-95"
           />
 
           <button
             onClick={handleStartEnter}
-            className="group flex items-center justify-center gap-4 w-full max-w-[260px] sm:max-w-[320px] px-8 py-3.5 sm:py-4 bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/30 text-[#d69135] text-xs sm:text-sm lg:text-base font-primary uppercase tracking-[0.25em] font-semibold transition-all duration-300 hover:scale-105 cursor-pointer shadow-2xl"
+            className="group flex items-center justify-center gap-4 w-full max-w-[260px] sm:max-w-[320px] px-8 py-3.5 sm:py-4 bg-black/45 hover:bg-black/65 backdrop-blur-md border border-white/30 text-brand-orange text-xs sm:text-sm lg:text-base font-primary uppercase tracking-[0.25em] font-semibold transition-all duration-300 hover:scale-105 cursor-pointer shadow-2xl"
           >
-            <ArrowLeft size={18} className="text-[#d69135] transition-transform duration-300 group-hover:-translate-x-1.5" />
+            <ArrowLeft size={18} className="text-brand-orange transition-transform duration-300 group-hover:-translate-x-1.5" />
             <span>INGRESAR</span>
           </button>
         </div>
