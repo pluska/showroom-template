@@ -7,7 +7,7 @@ interface UnitPopoverProps {
   scale: number;
   onMouseEnter: (unit: Unit) => void;
   onMouseLeave: () => void;
-  onOpenConsultation: (e: React.MouseEvent, unitId: string) => void;
+  onOpenConsultation: (e: React.MouseEvent, unitId: string, unitIdentifier?: string) => void;
   onNavigate: (path: string) => void;
   openDirection?: 'up' | 'down';
 }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { uploadBrochure, setActiveBrochure, deleteBrochure, updateBrochure } from "@/app/actions/brochure";
-import { BookOpen, CheckCircle, Trash2, Upload, FileText, Loader2, AlertTriangle, Building, LayoutGrid, Edit2, X } from "lucide-react";
+import { BookOpen, CheckCircle, Check, Trash2, Upload, FileText, Loader2, AlertTriangle, Building, LayoutGrid, Edit2, X } from "lucide-react";
 import { type Floor } from "@/data/floors";
 
 type Brochure = {
@@ -37,6 +37,12 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
   const [editUnitId, setEditUnitId] = useState<string>("");
   const [editFormError, setEditFormError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   const selectedFloor = floorsData.find((f) => f.id === selectedFloorId);
   const editSelectedFloor = floorsData.find((f) => f.id === editFloorId);
@@ -167,7 +173,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
         );
       } catch (error) {
         console.error("Error al activar brochure:", error);
-        alert("Ocurrió un error al cambiar el brochure activo.");
+        showNotification("error", "Ocurrió un error al cambiar el brochure activo.");
       }
     });
   };
@@ -181,15 +187,25 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
         setBrochures((prev) => prev.filter((b) => b.id !== id));
       } catch (error) {
         console.error("Error al eliminar brochure:", error);
-        alert("Ocurrió un error al eliminar el brochure.");
+        showNotification("error", "Ocurrió un error al eliminar el brochure.");
       }
     });
   };
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto animate-fade-in pb-12">
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <Check className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Upper header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 border-base-300 dark:border-base-200">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 border-base-300">
         <div>
           <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-brand-orange animate-pulse" />
@@ -202,7 +218,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
       </div>
 
       {!isSeller && (
-        <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 dark:border-base-300 p-6 md:p-8">
+        <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 p-6 md:p-8">
           <h2 className="text-xl font-bold font-primary mb-6 flex items-center gap-2 text-brand-orange">
             <Upload className="w-5 h-5 text-brand-orange" /> Subir Nuevo Brochure
           </h2>
@@ -211,7 +227,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
           {/* Tipo de Brochure */}
           <div className="form-control w-full">
             <label className="label">
-              <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300">Tipo de Brochure</span>
+              <span className="label-text font-bold text-xs text-gray-700">Tipo de Brochure</span>
             </label>
             <div className="flex gap-4">
               <label className="label cursor-pointer justify-start gap-2">
@@ -230,7 +246,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
             <div className="flex gap-4 w-full">
               <div className="form-control w-1/2">
                 <label className="label">
-                  <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300 flex items-center gap-1"><Building className="w-3 h-3"/> Piso</span>
+                  <span className="label-text font-bold text-xs text-gray-700 flex items-center gap-1"><Building className="w-3 h-3"/> Piso</span>
                 </label>
                 <select 
                   className="select select-bordered w-full text-sm" 
@@ -248,7 +264,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
               </div>
               <div className="form-control w-1/2">
                 <label className="label">
-                  <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300 flex items-center gap-1"><LayoutGrid className="w-3 h-3"/> Unidad</span>
+                  <span className="label-text font-bold text-xs text-gray-700 flex items-center gap-1"><LayoutGrid className="w-3 h-3"/> Unidad</span>
                 </label>
                 <select 
                   className="select select-bordered w-full text-sm" 
@@ -267,7 +283,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
 
           <div className="form-control w-full">
             <label className="label">
-              <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300">Título (Opcional)</span>
+              <span className="label-text font-bold text-xs text-gray-700">Título (Opcional)</span>
             </label>
             <input
               type="text"
@@ -278,7 +294,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
           </div>
           <div className="form-control w-full">
             <label className="label">
-              <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300">Archivo PDF</span>
+              <span className="label-text font-bold text-xs text-gray-700">Archivo PDF</span>
             </label>
             <input
               type="file"
@@ -296,7 +312,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
             </div>
           )}
 
-          <div className="mt-4 border-t border-base-200 dark:border-base-300 pt-4">
+          <div className="mt-4 border-t border-base-200 pt-4">
             <button 
               type="submit" 
               className="btn btn-warning bg-brand-orange text-white text-sm"
@@ -310,24 +326,24 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
         </div>
       )}
 
-      <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 dark:border-base-300 p-6 md:p-8">
+      <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 p-6 md:p-8">
         <h2 className="text-xl font-bold font-primary mb-6 flex items-center gap-2 text-brand-orange">
           <BookOpen className="w-5 h-5 text-brand-orange" /> Brochures Disponibles
         </h2>
 
         {brochures.length === 0 ? (
-          <div className="bg-base-100 rounded-xl border border-dashed border-base-300 dark:border-base-200 p-16 flex flex-col items-center justify-center text-center">
+          <div className="bg-base-100 rounded-xl border border-dashed border-base-300 p-16 flex flex-col items-center justify-center text-center">
             <div className="p-4 rounded-full bg-base-200 text-gray-400 mb-4">
               <FileText className="w-10 h-10" />
             </div>
             <p className="text-gray-500 font-medium text-sm">No hay brochures subidos todavía.</p>
           </div>
         ) : (
-          <div className="bg-base-100 rounded-xl border border-base-200 dark:border-base-300 overflow-hidden">
+          <div className="bg-base-100 rounded-xl border border-base-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="table table-zebra w-full text-left">
                 <thead>
-                  <tr className="bg-base-200/50 dark:bg-base-300/50">
+                  <tr className="bg-base-200/50">
                     <th>Título / Archivo</th>
                     <th>Tipo</th>
                     <th>Fecha de Subida</th>
@@ -339,8 +355,8 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
                   {brochures.map((brochure) => (
                     <tr key={brochure.id} className="hover:bg-base-200/30 transition-colors">
                       <td>
-                        <div className="font-bold text-gray-900 dark:text-white text-sm">{brochure.title}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 max-w-[250px] truncate">{brochure.url.split('/').pop()}</div>
+                        <div className="font-bold text-gray-900 text-sm">{brochure.title}</div>
+                        <div className="text-xs text-gray-500 max-w-[250px] truncate">{brochure.url.split('/').pop()}</div>
                       </td>
                       <td>
                         {brochure.type === 'GENERAL' ? (
@@ -353,7 +369,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
                         )}
                       </td>
                       <td>
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                        <span className="text-sm text-gray-600">
                           {brochure.createdAt ? new Date(brochure.createdAt).toLocaleDateString() : 'N/A'}
                         </span>
                       </td>
@@ -388,7 +404,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
                             <button
                               onClick={() => handleDelete(brochure.id)}
                               disabled={isPending}
-                              className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 hover:text-error"
+                              className="btn btn-ghost btn-xs text-gray-500 hover:text-error"
                               title="Eliminar brochure"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -421,7 +437,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
             <form onSubmit={handleUpdate} className="flex flex-col gap-4">
               <div className="form-control w-full">
                 <label className="label">
-                  <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300">Tipo de Brochure</span>
+                  <span className="label-text font-bold text-xs text-gray-700">Tipo de Brochure</span>
                 </label>
                 <div className="flex gap-4">
                   <label className="label cursor-pointer justify-start gap-2">
@@ -439,7 +455,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
                 <div className="flex gap-4 w-full">
                   <div className="form-control w-1/2">
                     <label className="label">
-                      <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300 flex items-center gap-1"><Building className="w-3 h-3"/> Piso</span>
+                      <span className="label-text font-bold text-xs text-gray-700 flex items-center gap-1"><Building className="w-3 h-3"/> Piso</span>
                     </label>
                     <select 
                       className="select select-bordered w-full text-sm" 
@@ -457,7 +473,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
                   </div>
                   <div className="form-control w-1/2">
                     <label className="label">
-                      <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300 flex items-center gap-1"><LayoutGrid className="w-3 h-3"/> Unidad</span>
+                      <span className="label-text font-bold text-xs text-gray-700 flex items-center gap-1"><LayoutGrid className="w-3 h-3"/> Unidad</span>
                     </label>
                     <select 
                       className="select select-bordered w-full text-sm" 
@@ -476,7 +492,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
 
               <div className="form-control w-full">
                 <label className="label">
-                  <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300">Título</span>
+                  <span className="label-text font-bold text-xs text-gray-700">Título</span>
                 </label>
                 <input
                   type="text"
@@ -488,7 +504,7 @@ export default function BrochureDashboard({ initialBrochures, floorsData, curren
 
               <div className="form-control w-full">
                 <label className="label">
-                  <span className="label-text font-bold text-xs text-gray-700 dark:text-gray-300">Nuevo Archivo PDF (Opcional)</span>
+                  <span className="label-text font-bold text-xs text-gray-700">Nuevo Archivo PDF (Opcional)</span>
                 </label>
                 <input
                   type="file"

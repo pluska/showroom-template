@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { getSetting, updateSetting } from "@/app/actions/settings";
 import defaultFeaturesJson from "@/data/features.json";
+import { getDb } from "@/lib/db";
+import { constructionProgress } from "@/lib/db/schema";
+import { count, isNull } from "drizzle-orm";
 
 export type SidebarFeature = {
   id: string;
@@ -19,41 +22,111 @@ const defaultSidebarFeatures = defaultFeaturesJson as SidebarFeature[];
 
 import { connection } from "next/server";
 
-export async function getFeatures(): Promise<SidebarFeature[]> {
+/** ¿Hay al menos un avance de obra publicado (no eliminado)? */
+async function hasConstructionProgress(): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const [row] = await db
+      .select({ total: count() })
+      .from(constructionProgress)
+      .where(isNull(constructionProgress.deletedAt));
+    return Number(row?.total || 0) > 0;
+  } catch (error) {
+    console.error("Error comprobando los avances de obra:", error);
+    return false;
+  }
+}
+
+/**
+ * Returns the sidebar features list.
+ * @param includeHidden - When true (e.g. for the dashboard), the video feature is
+ *   always included even if no VIDEO_SIDEBAR media is currently active.
+ *   When false (default, e.g. for the public sidebar), the video entry is
+ *   hidden whenever there is no active video to show.
+ */
+export async function getFeatures(includeHidden = false): Promise<SidebarFeature[]> {
   await connection();
   try {
     let dbFeatures = await getSetting("sidebar_features_list");
     
     // Seed database if not existing
     if (!dbFeatures || !Array.isArray(dbFeatures) || dbFeatures.length === 0) {
-      await updateSetting("sidebar_features_list", defaultSidebarFeatures);
+      const session = await auth();
+      if (session && session.user.role === "SUPER_ADMIN") {
+        await updateSetting("sidebar_features_list", defaultSidebarFeatures);
+      }
       dbFeatures = defaultSidebarFeatures;
     } else {
-      // Ensure all default features exist in dbFeatures (such as new features added later)
+      // Ensure all default features exist in dbFeatures, and align specific defaults like video and avance
       let changed = false;
-      defaultSidebarFeatures.forEach(defaultFeat => {
-        const exists = dbFeatures.some((f: SidebarFeature) => f.id === defaultFeat.id);
-        if (!exists) {
-          dbFeatures.push(defaultFeat);
+      defaultSidebarFeatures.forEach((defaultFeat, defaultIdx) => {
+        const idx = dbFeatures.findIndex((f: SidebarFeature) => f.id === defaultFeat.id);
+        if (idx === -1) {
+          // Insertar en la posición que ocupa en el default, no al final: de lo
+          // contrario una entrada nueva (p. ej. "video") aparece suelta después
+          // de Contacto en vez de en su lugar dentro del menú.
+          const anchor = defaultSidebarFeatures
+            .slice(0, defaultIdx)
+            .reduce((pos, prev) => {
+              const prevIdx = dbFeatures.findIndex((f: SidebarFeature) => f.id === prev.id);
+              return prevIdx === -1 ? pos : Math.max(pos, prevIdx + 1);
+            }, 0);
+          dbFeatures.splice(anchor, 0, defaultFeat);
           changed = true;
+        } else {
+          if ((defaultFeat.id === "video" || defaultFeat.id === "avance") && dbFeatures[idx].active !== defaultFeat.active) {
+            dbFeatures[idx].active = defaultFeat.active;
+            changed = true;
+          }
         }
       });
       if (changed) {
-        await updateSetting("sidebar_features_list", dbFeatures);
+        const session = await auth();
+        if (session && session.user.role === "SUPER_ADMIN") {
+          await updateSetting("sidebar_features_list", dbFeatures);
+        }
       }
     }
     
-    // Si no hay video, esconde la opción en el sidebar
-    const { getActiveMedia } = await import("@/app/actions/media");
-    const activeVideo = await getActiveMedia("VIDEO_SIDEBAR");
-    if (!activeVideo || activeVideo.length === 0) {
-       dbFeatures = dbFeatures.filter((f: SidebarFeature) => f.path !== "/video");
-    }
+    // "Avance de obra" se muestra solo si hay algo que enseñar: aparece en el
+    // menú en cuanto se publica el primer avance y se oculta si se borran
+    // todos. Así nadie llega a una página vacía.
+    const hasProgress = await hasConstructionProgress();
+
+    // El estado se fuerza en memoria (no en base) para que el cambio se vea de
+    // inmediato sin depender de permisos de escritura en visitas públicas.
+    //
+    // "Urbanización" (`floors`) apuntaba a `/plantas`, la ruta de las plantas
+    // del edificio de Océano. Al centralizarse todo el recorrido en
+    // `/showroom` esa ruta se quedó sin datos —respondía "Floor not found"— y
+    // la entrada del menú no llevaba a ninguna parte. Ahora abre la portada
+    // del showroom, que es la puerta del recorrido.
+    //
+    // Se fuerza aquí y no solo en `features.json` porque el merge de arriba
+    // únicamente inserta las entradas que faltan y realinea el `active` de
+    // `video` y `avance`: el `path` que ya está guardado en base manda, así
+    // que sin esto las instalaciones existentes seguirían con `/plantas`.
+    dbFeatures = dbFeatures.map((f: SidebarFeature) => {
+      if (f.id === "video") return { ...f, active: true };
+      if (f.id === "masterplan") return { ...f, active: true, label: "Master Plan", path: "/showroom?step=phases" };
+      if (f.id === "floors") return { ...f, label: "Urbanización", path: "/showroom?step=intro", preloadKey: "showroom" };
+      if (f.id === "avance") return { ...f, active: includeHidden ? true : hasProgress };
+      return f;
+    });
 
     return dbFeatures;
   } catch (error) {
     console.error("Error reading features from DB:", error);
-    return defaultSidebarFeatures.filter(f => f.path !== "/video"); // default to hiding if error just in case, or maybe not
+    // Si no se puede leer la base, se oculta "avance de obra": es preferible no
+    // ofrecer la entrada a mandar al visitante a una página posiblemente vacía.
+    const fallbackFeatures = defaultSidebarFeatures.map((f: SidebarFeature) => {
+      if (f.id === "video") return { ...f, active: true };
+      if (f.id === "masterplan") return { ...f, active: true, label: "Master Plan", path: "/showroom?step=phases" };
+      if (f.id === "floors") return { ...f, label: "Urbanización", path: "/showroom?step=intro", preloadKey: "showroom" };
+      if (f.id === "avance") return { ...f, active: includeHidden ? true : false };
+      return f;
+    });
+    return fallbackFeatures;
   }
 }
 

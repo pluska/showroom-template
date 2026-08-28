@@ -1,14 +1,19 @@
-name = "showroom-dashboard"
+# PLANTILLA — RELLENAR POR PROYECTO
+#   1. wrangler d1 create PROJECT-db      -> pegar el id devuelto en database_id
+#   2. wrangler r2 bucket create PROJECT-showroom
+# `name`, `database_name` y `bucket_name` deben coincidir con los scripts
+# db:* de package.json. Nunca reutilizar la base ni el bucket de otro cliente.
+name = "PROJECT-showroom"
 compatibility_date = "2026-06-01"
 compatibility_flags = [ "nodejs_compat" ]
 pages_build_output_dir = ".open-next/assets"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "showroom-db"
-database_id = "your-d1-database-id-here" # Replace with your actual D1 ID
+database_name = "PROJECT-db"
+database_id = "" # RELLENAR con el id de `wrangler d1 create`
 migrations_dir = "drizzle"
 
 [[r2_buckets]]
 binding = "R2"
-bucket_name = "template-testing"
+bucket_name = "PROJECT-showroom"

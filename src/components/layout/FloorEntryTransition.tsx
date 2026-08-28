@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { getAssetUrl } from '@/utils/assets';
 import { preloadImages } from '@/utils/preload';
+import { getEntryFloorId } from '@/data/floors';
 
 const SAFETY_TIMEOUT_MS = 4000;
 
@@ -25,21 +26,22 @@ export default function FloorEntryTransition() {
   const [isTargetReady, setIsTargetReady] = useState(false);
 
   const isActive = viewState === 'TRANSITION_VIDEO' && targetDestination === 'Floors' && !!transitionUrl;
-  const targetFloor = floorsData.find(f => f.id === '9');
+  const entryFloorId = getEntryFloorId(floorsData);
+  const targetFloor = floorsData.find(f => f.id === entryFloorId);
   const targetFloorImage = targetFloor ? getAssetUrl(targetFloor.floorPlanImage) : null;
 
   useEffect(() => {
     if (isActive) {
       if (!hasNavigatedRef.current && !pathname.startsWith('/plantas')) {
         hasNavigatedRef.current = true;
-        router.push('/plantas/9');
+        router.push(`/plantas/${entryFloorId}`);
       }
     } else {
       hasNavigatedRef.current = false;
       setVideoEnded(false);
       setIsTargetReady(false);
     }
-  }, [isActive, pathname, router]);
+  }, [isActive, pathname, router, entryFloorId]);
 
   // Don't reveal /plantas/9 until floor 9's data + image are actually ready —
   // on a very first/cold page load floorsData (or the image) may still be

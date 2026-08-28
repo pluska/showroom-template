@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/store/useStore';
 import gsap from 'gsap';
 import { preloadImages } from '@/utils/preload';
+import { getEntryFloorId } from '@/data/floors';
 
 interface SceneControllerProps {
   isHighlighted?: boolean;
@@ -14,15 +15,19 @@ interface BgLayer {
 }
 
 const CROSSFADE_MS = 350;
+// The crossfade and the pruning of the layer underneath are both scheduled off
+// the same load event, so revealing exactly at CROSSFADE_MS races them. A small
+// margin guarantees the video is pulled with the new face already fully opaque.
+const REVEAL_MARGIN_MS = 80;
 const VIDEO_END_SAFETY_TIMEOUT_MS = 4000;
 
 export default function SceneController({ isHighlighted }: SceneControllerProps) {
-  const { viewState, endTransition, currentRoom, currentFace, confirmRotation, finishRotation, transitionUrl, timeOfDay, targetDestination, floorsData, buildingFacesData } = useStore();
+  const { viewState, endTransition, currentRoom, currentFace, confirmRotation, finishRotation, confirmTimeLapse, finishTimeLapse, transitionUrl, timeOfDay, targetDestination, floorsData, buildingFacesData } = useStore();
 
   // Preload the first floor plan while the "enter building" walk video plays.
   useEffect(() => {
     if (viewState === 'TRANSITION_VIDEO' && targetDestination === 'Floors') {
-      const targetFloor = floorsData.find(f => f.id === '9');
+      const targetFloor = floorsData.find(f => f.id === getEntryFloorId(floorsData));
       if (targetFloor) preloadImages([targetFloor.floorPlanImage]).catch(() => { });
     }
   }, [viewState, targetDestination, floorsData]);
@@ -127,40 +132,42 @@ export default function SceneController({ isHighlighted }: SceneControllerProps)
   // never get stuck on a black screen if something never loads.
   const topBgLayer = bgLayers[bgLayers.length - 1];
   const isBackgroundReady = !!targetBackground && topBgLayer?.src === targetBackground && readyLayerIds.has(topBgLayer.id);
-  const [videoEndedPendingReveal, setVideoEndedPendingReveal] = useState(false);
+
+  // A finished video is not torn down on the spot. The scene it lands on is
+  // committed *underneath* the video first (so the new face mounts, decodes and
+  // crossfades in while the last frame still covers everything), and only then
+  // is the video removed. Swapping and unmounting in the same tick used to
+  // expose the previous face for the length of the crossfade — the flash
+  // between the video and the still image.
+  const [pendingReveal, setPendingReveal] = useState<'lobby' | 'rotation' | 'timelapse' | null>(null);
 
   useEffect(() => {
-    if (!videoEndedPendingReveal) return;
-    if (isBackgroundReady) {
-      endTransition('Lobby');
-      setVideoEndedPendingReveal(false);
-      return;
-    }
-    const timeout = setTimeout(() => {
-      endTransition('Lobby');
-      setVideoEndedPendingReveal(false);
-    }, VIDEO_END_SAFETY_TIMEOUT_MS);
+    if (!pendingReveal) return;
+
+    const reveal = () => {
+      if (pendingReveal === 'lobby') endTransition('Lobby');
+      else if (pendingReveal === 'rotation') finishRotation();
+      else finishTimeLapse();
+      setPendingReveal(null);
+    };
+
+    // Decoded, but still crossfading in behind the video: waiting out the fade
+    // means pulling the video can never expose a half-faded frame. The safety
+    // timeout keeps a background that never loads from freezing the video.
+    const delay = isBackgroundReady ? CROSSFADE_MS + REVEAL_MARGIN_MS : VIDEO_END_SAFETY_TIMEOUT_MS;
+    const timeout = setTimeout(reveal, delay);
     return () => clearTimeout(timeout);
-  }, [videoEndedPendingReveal, isBackgroundReady, endTransition]);
+  }, [pendingReveal, isBackgroundReady, endTransition, finishRotation, finishTimeLapse]);
 
   const handleVideoEnd = () => {
     if (viewState === 'TRANSITION_VIDEO') {
-      setVideoEndedPendingReveal(true);
+      setPendingReveal('lobby');
     } else if (viewState === 'TRANSITION_ROTATION') {
-      // Commit target face and unmount immediately
-      useStore.setState((s) => ({
-        currentFace: s.nextFace !== null ? s.nextFace : s.currentFace,
-        nextFace: null,
-        viewState: 'IDLE',
-        transitionUrl: null
-      }));
+      confirmRotation();
+      setPendingReveal('rotation');
     } else if (viewState === 'TRANSITION_TIMELAPSE') {
-      // Commit target time of day and unmount immediately
-      useStore.setState((s) => ({
-        timeOfDay: s.timeOfDay === 'day' ? 'night' : 'day',
-        viewState: 'IDLE',
-        transitionUrl: null
-      }));
+      confirmTimeLapse();
+      setPendingReveal('timelapse');
     }
   };
 
@@ -216,7 +223,7 @@ export default function SceneController({ isHighlighted }: SceneControllerProps)
                 alt="Highlight"
               />
             )}
-            {currentFaceData?.name && (
+            {currentFaceData?.name && currentFace !== 0 && (
               <div className="absolute top-10 left-10 p-4 bg-black/50 text-white z-20">
                 <h1 className="text-2xl font-light tracking-widest">{currentFaceData.name}</h1>
               </div>

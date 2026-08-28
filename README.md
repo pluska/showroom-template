@@ -1,80 +1,83 @@
-# Showroom Virtual Template
+# Showroom Virtual — Plantilla **Horizontal** (urbanización)
 
-A high-performance, data-driven Next.js template for creating virtual real estate showrooms. Designed for a "clone-and-fill" workflow, this template allows you to deploy a new project in minutes by simply updating data files and assets.
+Branch `horizontal` de `showroom-template`. Es la variante para proyectos de
+**urbanización horizontal**: lados → fases → zonas → manzanas → lotes / torres →
+unidad. Para un proyecto de un solo edificio (caras → plantas → unidad), usa la
+branch `dashboard`.
 
-## 🚀 Getting Started
+| Branch | Modelo del inmueble | Navegación |
+|---|---|---|
+| `dashboard` | Un **edificio** | Caras (giro con topes) → Plantas → Unidad |
+| `horizontal` | Una **urbanización** | Lados (giro **cíclico**) → Fases → Zonas → Elementos → Torres/Casas → Unidad |
 
-### 1. Initialization
+Las dos comparten el mismo panel de administración, la misma base D1, el mismo
+bucket R2 y los mismos módulos (media, brochure, tours, calendario, mapa,
+avance de obra, analíticas, contenido). Lo único que cambia es la capa que
+describe el inmueble.
 
-Follow these steps to set up the project for the first time:
+## Empezar un proyecto nuevo
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/pluska/showroom-template.git your-project-name
-   cd your-project-name
-   ```
+Lee **[CLONE_AND_FILL.md](./CLONE_AND_FILL.md)**: es la lista ordenada de todo
+lo que hay que rellenar, con los archivos exactos. Después de eso, la
+documentación del modelo:
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+| Documento | Contenido |
+|---|---|
+| [docs/00-ESTRUCTURA.md](./docs/00-ESTRUCTURA.md) | Modelo de dominio, jerarquía y enums |
+| [docs/01-NAVEGACION.md](./docs/01-NAVEGACION.md) | Flujo y reglas de desplazamiento |
+| [docs/02-ASSETS.md](./docs/02-ASSETS.md) | Nomenclatura de archivos y claves R2 |
+| [docs/03-SCHEMA-DB.md](./docs/03-SCHEMA-DB.md) | Esquema D1 propuesto para el inmueble |
+| [docs/04-PENDIENTES.md](./docs/04-PENDIENTES.md) | Supuestos del modelo y decisiones abiertas |
+| [docs/05-PLANTILLA.md](./docs/05-PLANTILLA.md) | Qué es genérico y qué se rellena por proyecto |
+| [STRUCTURE.md](./STRUCTURE.md) | Arquitectura y organización de archivos |
+| [RULES_AI.md](./RULES_AI.md) | Reglas para agentes de IA que toquen este código |
 
-3. **Configure Environment:**
-   Copy the example environment file and fill in your credentials:
-   ```bash
-   cp .env.example .env.local
-   ```
-   *Note: Ensure you set at least `NEXTAUTH_SECRET`, `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`, and `NEXT_PUBLIC_ASSET_BASE_URL`.*
+> Los documentos `00`–`04` describen el modelo **con los datos de ejemplo que
+> vienen en la branch** (una urbanización de 4 lados, 3 fases y 3 torres,
+> tomados de El Olimpo de Tumbes). El modelo no asume esas cantidades: son
+> datos, no reglas. Ver `docs/05-PLANTILLA.md`.
 
-4. **Initialize Database:**
-   This project uses Cloudflare D1. Initialize your local database with migrations and seed data:
-   ```bash
-   # Generate migrations from schema
-   npm run db:generate
+## Puesta en marcha
 
-   # Apply migrations to local D1 instance
-   npm run db:migrate
-
-   # (Optional) Seed the database with initial data
-   npm run db:seed
-   ```
-
-### 2. Running Locally
-
-Once initialized, you can run the project in development mode:
-
-**Standard Next.js Development:**
 ```bash
-npm run dev
+npm install
+cp .env.example .env
 ```
 
-**Cloudflare Pages Environment (Recommended for D1/R2 features):**
+Rellena al menos `NEXTAUTH_SECRET`, `NEXT_PUBLIC_R2_PUBLIC_URL` y
+`NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN`. Después, la base de datos:
+
 ```bash
-npm run dev:pages
+wrangler d1 create PROJECT-db      # pega el id en wrangler.toml
+npm run db:generate                # migraciones desde el schema
+npm run db:migrate                 # aplicarlas a la D1 local
 ```
-The application will be available at [http://localhost:3000](http://localhost:3000).
 
----
+Los usuarios del panel se siembran desde un archivo **local**, nunca desde el
+repositorio: ver la cabecera de `src/lib/db/insert-users.sql`.
 
-## 📂 Project Documentation
+Y a correr:
 
-- [**CLONE_AND_FILL.md**](./CLONE_AND_FILL.md): Detailed step-by-step setup guide.
-- [**STRUCTURE.md**](./STRUCTURE.md): Overview of the project architecture and file organization.
-- [**RULES_AI.md**](./RULES_AI.md): Essential rules for AI coding assistants to maintain template integrity.
+```bash
+npm run dev          # Next.js a secas
+npm run dev:pages    # con D1/R2 reales vía wrangler (recomendado)
+```
 
-## ✨ Key Features
+## Qué trae
 
-- **360° Scene Controller**: Smooth transitions between building faces with background video support.
-- **Interactive Floor Plans**: SVG-based unit highlighting and status management.
-- **Virtual Tours Integration**: Seamless embedding of Matterport or similar 360° tours.
-- **Dynamic Map**: Custom Mapbox integration with route calculation.
-- **Mobile First**: Fully responsive design optimized for mobile showroom experiences.
+- **Recorrido 360° de la urbanización**: giro cíclico entre lados con videos de
+  transición, entrada al proyecto, desplazamiento por zonas con chevrons.
+- **Modelo de dominio data-driven** (`src/data/urbanization/`): nada en la UI
+  asume cuántos lados, fases, zonas o torres hay.
+- **Fichas de módulo y departamento** con planos SVG interactivos y estado
+  comercial por unidad.
+- **Panel de administración**: unidades, multimedia, brochures, tours 360,
+  galerías, calendario de citas, mapa de POIs, avance de obra, identidad,
+  usuarios con roles, analíticas y generación de contenido.
+- **Cloudflare nativo**: D1 (datos), R2 (media pesada), Pages/Workers vía
+  OpenNext.
 
-## 🛠 Tech Stack
+## Stack
 
-- **Framework**: Next.js 15+ (App Router)
-- **Styling**: Tailwind CSS
-- **Animations**: GSAP (GreenSock)
-- **State Management**: Zustand
-- **Maps**: React Map GL (Mapbox)
-- **Icons**: Lucide React
+Next.js 16 (App Router) · React 19 · Tailwind 4 + DaisyUI · Zustand · GSAP ·
+Konva (planos) · Mapbox · Drizzle + D1 · NextAuth · Resend

@@ -4,7 +4,6 @@ import UserList from "@/components/dashboard/users/UserList";
 import UserFormModal from "@/components/dashboard/users/UserFormModal";
 import { Users } from "lucide-react";
 
-export const runtime = "edge";
 
 export const metadata = {
   title: "Gestión de Usuarios - Dashboard",
@@ -20,6 +19,7 @@ export default async function UsersPage() {
 
   const users = await getUsers();
   const isSuperAdmin = session.user.role === "SUPER_ADMIN";
+  const isAdmin = session.user.role === "ADMIN";
 
   return (
     <div className="flex flex-col gap-6">
@@ -35,7 +35,7 @@ export default async function UsersPage() {
       </div>
 
       <div className="bg-base-100 rounded-lg shadow">
-        <UserList users={users} isSuperAdmin={isSuperAdmin} />
+        <UserList users={users} isSuperAdmin={isSuperAdmin} isAdmin={isAdmin} />
       </div>
     </div>
   );

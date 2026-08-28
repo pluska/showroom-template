@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Sidebar from "@/components/layout/Sidebar";
-import { Calendar, ChevronLeft, ChevronRight, Menu, Hammer } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Menu, Hammer, Loader2 } from "lucide-react";
 import gsap from "gsap";
 import FullScreenToggle from "@/components/UI/FullScreenToggle";
 import { getAssetUrl } from "@/utils/assets";
@@ -24,13 +24,21 @@ interface ConstructionProgressClientProps {
 export default function ConstructionProgressClient({ initialUpdates }: ConstructionProgressClientProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Los clips de avance pueden ser pesados: se permite reproducción progresiva sin tapar el video.
+  const [isVideoLoading, setIsVideoLoading] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
   const mediaRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const updates = initialUpdates;
   const currentUpdate = updates[currentIndex];
 
   useEffect(() => {
+    // Intentar reproducir video inmediatamente al cambiar de update
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+
     // Animation when changing update
     if (updates.length === 0) return;
 
@@ -132,16 +140,38 @@ export default function ConstructionProgressClient({ initialUpdates }: Construct
                 className="w-full h-full object-cover"
               />
             ) : (
-              <video
-                key={currentUpdate.mediaUrl}
-                autoPlay
-                muted
-                loop
-                playsInline
-                className="w-full h-full object-cover"
-              >
-                <source src={getAssetUrl(currentUpdate.mediaUrl)} type="video/mp4" />
-              </video>
+              <>
+                <video
+                  ref={videoRef}
+                  key={currentUpdate.mediaUrl}
+                  src={getAssetUrl(currentUpdate.mediaUrl)}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  // preload="auto" para que el navegador comience la descarga progresiva inmediatamente
+                  preload="auto"
+                  onLoadStart={() => setIsVideoLoading(true)}
+                  onLoadedData={() => setIsVideoLoading(false)}
+                  onCanPlay={() => setIsVideoLoading(false)}
+                  onPlaying={() => setIsVideoLoading(false)}
+                  onWaiting={() => setIsVideoLoading(true)}
+                  onError={() => setIsVideoLoading(false)}
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Indicador flotante sin opacar ni ocultar el video mientras carga/hace buffering */}
+                {isVideoLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                    <div className="flex items-center gap-3 px-4 py-2.5 rounded-full bg-black/40 border border-white/15 backdrop-blur-md shadow-2xl animate-fade-in">
+                      <Loader2 className="w-4 h-4 text-brand-orange animate-spin" />
+                      <span className="text-[11px] font-medium uppercase tracking-[0.15em] text-white/90 font-secondary">
+                        Cargando video...
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

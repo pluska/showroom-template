@@ -85,6 +85,12 @@ export default function ToursDashboard({ initialTours, units, media, currentUser
   const [order, setOrder] = useState(0);
   const [formError, setFormError] = useState("");
 
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
   // Unit Search Select States
   const [unitSearch, setUnitSearch] = useState("");
   const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState(false);
@@ -297,7 +303,7 @@ export default function ToursDashboard({ initialTours, units, media, currentUser
       await toggleTourActive(id, !currentStatus);
       setToursList(prev => prev.map(t => t.id === id ? { ...t, isActive: !currentStatus } : t));
     } catch (err: any) {
-      alert("Error al cambiar estado: " + err.message);
+      showNotification("error", "Error al cambiar estado: " + err.message);
     }
   };
 
@@ -316,13 +322,23 @@ export default function ToursDashboard({ initialTours, units, media, currentUser
         setIsDeleteOpen(false);
         setTourToDelete(null);
       } catch (err: any) {
-        alert("Error al eliminar recorrido: " + err.message);
+        showNotification("error", "Error al eliminar recorrido: " + err.message);
       }
     });
   };
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto animate-fade-in pb-12">
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <Check className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 border-base-300">
         <div>

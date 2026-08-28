@@ -18,6 +18,7 @@ export default function Topbar({ user }: TopbarProps) {
   const getModuleTitle = (path: string) => {
     if (path === "/dashboard") return "Métricas";
     if (path.startsWith("/dashboard/calendar")) return "Calendario";
+    if (path.startsWith("/dashboard/content")) return "Contenido";
     if (path.startsWith("/dashboard/users")) return "Usuarios";
     if (path.startsWith("/dashboard/units")) return "Unidades";
     if (path.startsWith("/dashboard/media")) return "Multimedia";

@@ -49,6 +49,12 @@ export async function getToursPublic() {
       createdAt: tours.createdAt,
       unitIdentifier: units.identifier,
       floorName: floors.name,
+      // Unit attributes drive the public filter bar on /recorridos.
+      // Null for building-wide tours, which are excluded from unit filtering.
+      floorLevel: floors.level,
+      bedrooms: units.bedrooms,
+      bathrooms: units.bathrooms,
+      areaSqm: units.areaSqm,
     })
     .from(tours)
     .leftJoin(units, eq(tours.unitId, units.id))

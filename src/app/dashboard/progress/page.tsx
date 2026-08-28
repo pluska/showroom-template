@@ -2,7 +2,6 @@ import { auth } from "@/auth";
 import { getProgressUpdates } from "@/app/actions/progress";
 import ProgressDashboard from "@/components/dashboard/progress/ProgressDashboard";
 
-export const runtime = "edge";
 
 export const metadata = {
   title: "Gestión de Avances de Obra - Dashboard",

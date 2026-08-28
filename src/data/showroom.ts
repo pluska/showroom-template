@@ -9,7 +9,7 @@ export interface ShowroomConfig {
 
 export const showroomConfig: ShowroomConfig = {
   initialRoom: 'Lobby',
-  initialFloor: 1,
+  initialFloor: 9,
   initialFace: 0,
   initialTimeOfDay: 'day',
   idleTimeBeforeHint: 10000,

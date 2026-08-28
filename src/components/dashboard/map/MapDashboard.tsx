@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Edit, MapPin, Search, Loader2, ToggleLeft, ToggleRight, X, Compass, Upload, Image as ImageIcon } from "lucide-react";
+import { Plus, Trash2, Edit, MapPin, Search, Loader2, ToggleLeft, ToggleRight, X, Compass, Upload, Image as ImageIcon, Check, AlertTriangle } from "lucide-react";
 import { 
   createLocation, 
   updateLocation, 
@@ -111,6 +111,12 @@ export default function MapDashboard({ initialLocations }: MapDashboardProps) {
 
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   // Filtered locations list
   const filteredLocations = useMemo(() => {
@@ -238,7 +244,7 @@ export default function MapDashboard({ initialLocations }: MapDashboardProps) {
         prev.map((l) => (l.id === loc.id ? { ...l, isActive: !loc.isActive } : l))
       );
     } catch (err: any) {
-      alert(err.message || "Error al alternar estado.");
+      showNotification("error", err.message || "Error al alternar estado.");
     }
   };
 
@@ -249,12 +255,22 @@ export default function MapDashboard({ initialLocations }: MapDashboardProps) {
       await deleteLocation(id);
       setLocations((prev) => prev.filter((l) => l.id !== id));
     } catch (err: any) {
-      alert(err.message || "Error al eliminar el punto.");
+      showNotification("error", err.message || "Error al eliminar el punto.");
     }
   };
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto animate-fade-in pb-12 font-secondary">
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <Check className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="border-b pb-5 border-base-300 flex justify-between items-center">
         <div>

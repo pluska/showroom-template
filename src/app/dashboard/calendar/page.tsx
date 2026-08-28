@@ -2,7 +2,6 @@ import { auth } from "@/auth";
 import CalendarDashboard from "@/components/dashboard/calendar/CalendarDashboard";
 import { Calendar } from "lucide-react";
 
-export const runtime = "edge";
 
 export const metadata = {
   title: "Calendario de Citas - Dashboard",

@@ -3,9 +3,10 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { getDb } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "your-super-secret-nextauth-key-change-in-production",
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -22,7 +23,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user || user.deletedAt) return null;
 
-        const passwordsMatch = bcrypt.compareSync(credentials.password as string, user.password);
+        const { compareSync } = await import('bcryptjs');
+        const passwordsMatch = compareSync(credentials.password as string, user.password);
         
         if (passwordsMatch) {
           return {

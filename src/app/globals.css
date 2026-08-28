@@ -25,14 +25,117 @@
   themes: light --default;
 }
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* ===========================================================================
+   MODO HORIZONTAL FORZADO — breakpoints
+   ---------------------------------------------------------------------------
+   `ForcedLandscapeWrapper` gira la app 90°: su caja mide `100vh x 100vw`, así
+   que en un teléfono de 375x812 el contenido se dibuja sobre 812x375. Las
+   media queries, en cambio, siguen midiendo el viewport físico —375px— y
+   ninguna de las ~320 utilidades `sm:`/`md:`/`lg:` de la app llegaba a
+   dispararse: el layout más estrecho del diseño quedaba estirado sobre una
+   caja ancha (logo de 140px, `text-sm`, `p-4`...). Eso, y no la rotación, es
+   lo que hacía que las vistas no encajaran.
+
+   Ninguna media query puede leer el tamaño de un ancestro, así que el wrapper
+   publica en <html> los breakpoints que la caja girada SÍ cumple
+   —`data-fl-bp="sm md"`— y aquí se reabre cada variante para ese atributo.
+   Los componentes no cambian: las mismas clases pasan a responder al ancho
+   real de la caja.
+
+   El orden se conserva porque la regla del atributo se emite DENTRO de su
+   propia variante: `lg:` se sigue escribiendo después de `md:`, y ambos
+   después de la utilidad base, así que la cascada resuelve igual que con las
+   media queries.
+   =========================================================================== */
+@custom-variant sm {
+  @media (width >= 40rem) { @slot; }
+  html[data-fl-bp~="sm"] & { @slot; }
+}
+
+@custom-variant md {
+  @media (width >= 48rem) { @slot; }
+  html[data-fl-bp~="md"] & { @slot; }
+}
+
+@custom-variant lg {
+  @media (width >= 64rem) { @slot; }
+  html[data-fl-bp~="lg"] & { @slot; }
+}
+
+@custom-variant xl {
+  @media (width >= 80rem) { @slot; }
+  html[data-fl-bp~="xl"] & { @slot; }
+}
+
+/* `short:` — la caja es ancha pero baja. Los breakpoints de Tailwind sólo
+   miden ancho, así que una caja de 812x375 se lleva la tipografía y los aires
+   pensados para 800px de alto: un titular `text-5xl` con `pt-24` ocupa la
+   vista entera y las tarjetas quedan bajo el pliegue. `short:` es la salida:
+   afuera lo decide una media query de alto, y dentro del modo girado —donde
+   `height` sigue siendo el alto del teléfono, no el de la caja— lo dice el
+   wrapper con `data-fl-short`. */
+@custom-variant short {
+  @media (height <= 500px) { @slot; }
+  html[data-fl-short] & { @slot; }
+}
+
+/* ===========================================================================
+   MODO HORIZONTAL FORZADO — unidades de viewport
+   ---------------------------------------------------------------------------
+   Dentro de la caja girada, `100vh` y `100vw` siguen midiendo el viewport
+   físico, que está de pie: los ejes quedan intercambiados. Una página con
+   `h-screen` mide 812px de alto dentro de una caja de 375px y el 54% de la
+   vista se recortaba —de ahí los master plan cortados—. Se reanclan al 100%
+   de la caja, que es lo que esas alturas querían decir.
+
+   Van sin `@layer`, así que ganan a la utilidad de Tailwind sin `!important`.
+   El wrapper no se afecta a sí mismo: el selector es de descendencia, y su
+   propio tamaño lo fijan los estilos en línea.
+   =========================================================================== */
+.forced-landscape .h-screen { height: 100%; }
+.forced-landscape .w-screen { width: 100%; }
+.forced-landscape .min-h-screen { min-height: 100%; }
+.forced-landscape .max-h-screen { max-height: 100%; }
+.forced-landscape .min-w-screen { min-width: 100%; }
+
+/* Alto util de la app, en un solo sitio: normalmente `100dvh` —que descuenta
+   la barra del navegador en movil—; girados, el alto real de la caja, que el
+   wrapper escribe en <html> como estilo en linea y por tanto gana a este
+   valor por defecto. Lo consumen `.h-app` y todo calculo que antes partia de
+   `100dvh` (el ancho de las tarjetas de fase sale de aqui). */
+:root { --app-h: 100dvh; }
+
+.h-app { height: var(--app-h); }
 
 @theme {
-  --color-brand-orange: #F59C1D;
-  --color-brand-dark-orange: #D68310;
-  --color-brand-light-orange: #FAB428;
-  --color-brand-yellow: #FAE200;
-  --color-brand-primary: #F59C1D;
+  /* Paleta de Olimpo: azul marino y dorado, muestreados del logotipo
+     `public/identity/olimpo/logo.png` (#233D78 y #D69135).
+     Si el cliente entrega un manual de marca con los hex oficiales, se
+     corrigen aquí y en `config.colors` — no hay que tocar ni un componente.
+
+     Los NOMBRES de los tokens (`brand-orange`, `ocean-*`) son herencia de
+     Océano Atlántico y ya no describen su color: los usan ~400 clases en toda
+     la app, así que renombrarlos es un cambio aparte y puramente cosmético.
+     `--color-brand-primary` debe seguir a `config.colors.main`. */
+  --color-brand-orange: #D69135;
+  --color-brand-dark-orange: #B0752A;
+  --color-brand-light-orange: #E5AB5E;
+  --color-brand-yellow: #F2C53D;
+  --color-brand-primary: #233D78;
+
+  /* Escala del azul marino de marca (claro → profundo). Alimenta las ondas
+     del menú y los fondos de transición. */
+  --color-ocean-50: #eef1f8;
+  --color-ocean-100: #d5dcee;
+  --color-ocean-200: #aebcdd;
+  --color-ocean-300: #8197c8;
+  --color-ocean-400: #5772ae;
+  --color-ocean-500: #3a5493;
+  --color-ocean-600: #2d4581;
+  --color-ocean-700: #233D78;
+  --color-ocean-800: #1b2f5c;
+  --color-ocean-900: #14213f;
+  --color-ocean-950: #0c1428;
 
   --font-primary: 'Montserrat', sans-serif;
   --font-secondary: 'Inter', sans-serif;
@@ -41,7 +144,7 @@
 
   --animate-fade-in: fadeIn 0.3s ease-out forwards;
   --animate-scale-in: scaleIn 0.3s ease-out forwards;
-  
+
   @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -52,6 +155,7 @@
     to { opacity: 1; transform: scale(1); }
   }
 }
+
 
 html, body {
   margin: 0;
@@ -79,4 +183,88 @@ html, body {
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background-color: #9CA3AF;
   border-radius: 9999px;
+}
+
+/* ===========================================================================
+   NAVEGACIÓN — motivo del Olimpo
+   ---------------------------------------------------------------------------
+   Reemplaza al oleaje de Océano Atlántico. El vocabulario sale del propio
+   logotipo: un templo griego en azul marino y dorado. Tres piezas:
+
+     · .olympus-fret     greca (meandro) dorada, el borde superior de la barra
+     · .olympus-cornice  la cornisa sobre la que se apoya la greca
+     · .olympus-colonnade  estriado vertical tenue = columnas, en el panel
+
+   A diferencia de las olas, la arquitectura NO se mueve: se quitaron las
+   cuatro animaciones infinitas que recorrían el crest, y con ellas su coste
+   de repintado permanente.
+   =========================================================================== */
+
+/* Botón: en vez de agua subiendo, luz dorada que asciende por la columna. */
+.olympus-btn {
+  position: relative !important;
+  overflow: hidden !important;
+  z-index: 1; /* crea el contexto de apilado */
+}
+
+.olympus-btn-glow {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  top: 100%;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    linear-gradient(to top, var(--color-brand-orange) 0%, rgba(214, 145, 53, 0.35) 55%, rgba(214, 145, 53, 0) 100%);
+  opacity: 0.55;
+  transition: top 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.45s ease;
+}
+
+.olympus-btn:hover .olympus-btn-glow {
+  top: 0;
+  opacity: 0.9;
+}
+
+/* Greca. Un meandro por tile, colgado de una línea de base continua: sin ella
+   las unidades se leen sueltas, como sellos, en vez de como friso corrido. */
+.olympus-fret {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='16'%3E%3Cg fill='none' stroke='%23D69135' stroke-width='1.7' stroke-linecap='square'%3E%3Cpath d='M0 14.6 H34'/%3E%3Cpath d='M5 14.6 V4 H27 V11 H13 V7.6 H20'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: left bottom;
+  background-size: 34px 16px;
+  pointer-events: none;
+}
+
+/* Filo dorado de la cornisa + su sombra hacia abajo. */
+.olympus-cornice {
+  background: linear-gradient(
+    to bottom,
+    var(--color-brand-orange) 0px,
+    var(--color-brand-orange) 2px,
+    rgba(214, 145, 53, 0.35) 3px,
+    rgba(214, 145, 53, 0) 5px
+  );
+  pointer-events: none;
+}
+
+/* Estriado de columnas: bandas verticales muy tenues sobre el panel. */
+.olympus-colonnade {
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.055) 0px,
+    rgba(255, 255, 255, 0.055) 1px,
+    rgba(0, 0, 0, 0.05) 2px,
+    rgba(0, 0, 0, 0.05) 3px,
+    rgba(255, 255, 255, 0) 4px,
+    rgba(255, 255, 255, 0) 22px
+  );
+  pointer-events: none;
+}
+
+/* El logo de Mapbox se oculta por pedido de diseño. La atribución
+   (© Mapbox / © OpenStreetMap) se deja visible a propósito: los términos de
+   Mapbox exigen mantenerla. */
+.mapboxgl-ctrl-logo {
+  display: none !important;
 }

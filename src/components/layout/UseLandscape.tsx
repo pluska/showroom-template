@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useStore } from '../../store/useStore';
+import config from '@/config/config';
+
+const SESSION_KEY = 'olimpo-landscape-shown';
 
 const UseLandscape = () => {
     const pathname = usePathname();
@@ -38,20 +41,31 @@ const UseLandscape = () => {
     }, []);
 
     useEffect(() => {
-        // Exclude dashboard and login routes
-        if (pathname?.startsWith('/dashboard') || pathname?.startsWith('/login')) {
+        // Exclude dashboard, login, and ubicacion routes from global overlay
+        if (pathname?.startsWith('/dashboard') || pathname?.startsWith('/login') || pathname?.startsWith('/ubicacion')) {
             setShowOverlay(false);
             setForcedLandscape(false);
             return;
         }
 
         if (isMobile && isPortrait) {
+            const alreadyShown = sessionStorage.getItem(SESSION_KEY) === 'true';
+
+            if (alreadyShown) {
+                // Already shown this session — skip overlay, go straight to forced landscape
+                setShowOverlay(false);
+                setForcedLandscape(true);
+                return;
+            }
+
+            // First time this session — show the overlay
             setShowOverlay(true);
             setForcedLandscape(false);
             
             const timer = setTimeout(() => {
                 setShowOverlay(false);
                 setForcedLandscape(true);
+                sessionStorage.setItem(SESSION_KEY, 'true');
             }, 3000);
 
             return () => clearTimeout(timer);
@@ -69,10 +83,10 @@ const UseLandscape = () => {
             {/* Pulsating Logo */}
             <div className="mb-12 relative">
                 <div className="absolute inset-0 bg-brand-orange/20 blur-xl rounded-full animate-pulse" />
-                <img 
-                    src="/identity/identity_logo_ISOTIPO.png" 
-                    alt="Logo" 
-                    className="w-24 h-24 object-contain relative z-10 animate-pulse" // Simple pulse for now
+                <img
+                    src={config.logos.projectWhite}
+                    alt={config.company.buildingName}
+                    className="w-56 h-auto object-contain relative z-10 animate-pulse"
                 />
             </div>
 

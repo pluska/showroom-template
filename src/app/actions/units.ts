@@ -5,6 +5,13 @@ import { floors, units, logs } from "@/lib/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { floorsData as staticFloorsData } from "@/data/floors";
+import { lotBlocks, lotUnits } from "@/data/urbanization/lots";
+import { towers } from "@/data/urbanization/towers";
+import { APARTMENT_AREA_SQM, APARTMENT_TOUR_URL } from "@/data/urbanization/apartments";
+import { ZoneId, TowerId, UnitStatus, LotPosition, TowerFloorKind } from "@/data/urbanization/enums";
+import { lotPlanImage, lotMeasuredPlanImage } from "@/data/urbanization/assets";
+import { getAssetUrl } from "@/utils/assets";
 
 // Helper to audit actions
 async function logAction(
@@ -62,6 +69,9 @@ export async function getFloorsData() {
     .orderBy(units.identifier);
 
   return allFloors.map(f => {
+    const rawFloorId = f.id.replace('floor_', '');
+    const staticFloor = staticFloorsData.find(sf => sf.id === rawFloorId);
+
     const floorUnits = allUnits
       .filter(u => u.floorId === f.id)
       .filter(u => {
@@ -77,30 +87,22 @@ export async function getFloorsData() {
         
         const coords = u.coordinates as { x?: number; y?: number; path?: string } | null;
         
+        const cleanUnitId = u.id.replace(`unit_${rawFloorId}_`, '');
+        const staticUnit = staticFloor?.units.find(
+          su => su.id === cleanUnitId || su.id === u.identifier || (su.identifier && su.identifier === u.identifier)
+        );
+
         let subtitle = 'Flat';
         if (u.type === 'STORAGE') {
-          if (u.identifier.startsWith('PB')) {
-            subtitle = `Depósito ${u.identifier.replace('PB ', '')}`;
-          } else if (['101', '102', '103', '104', '105'].includes(u.identifier)) {
-            subtitle = `Estacionamiento ${u.identifier.slice(-1)}`;
-          } else {
-            subtitle = 'Bodega';
-          }
+          subtitle = 'Bodega';
+        } else if (u.type === 'DUPLEX') {
+          // Marks the unit as spanning two floors, which is what makes the unit
+          // page show the level selector between its lower and upper plans.
+          subtitle = 'Dúplex';
         } else if (u.identifier === 'Terraza') {
           subtitle = 'Terraza';
         } else if (u.identifier === '801') {
-          subtitle = 'Dúplex';
-        }
-
-        let assetId = u.identifier;
-        if (u.identifier.endsWith('01') && u.identifier !== '801') {
-          assetId = 'x01';
-        } else if (u.identifier.endsWith('02') && u.identifier !== '802') {
-          assetId = 'x02';
-        } else if (u.identifier === '801') {
-          assetId = f.level === 9 ? '901' : '801';
-        } else if (u.identifier === 'Terraza') {
-          assetId = '902';
+          subtitle = 'Duplex';
         }
 
         return {
@@ -117,16 +119,21 @@ export async function getFloorsData() {
           description: '',
           images: u.gallery ? (u.gallery as string[]) : [],
           tourUrl: u.tourUrl || undefined,
-          assetId,
-          x: coords?.x,
-          y: coords?.y,
-          path: coords?.path,
+          x: coords?.x ?? staticUnit?.x,
+          y: coords?.y ?? staticUnit?.y,
+          path: coords?.path ?? staticUnit?.path,
+          photosFurnished: u.photosFurnished ? (u.photosFurnished as string[]) : [],
+          photosUnfurnished: u.photosUnfurnished ? (u.photosUnfurnished as string[]) : [],
+          photosPlans: u.photosPlans ? (u.photosPlans as string[]) : [],
+          photosBalcony: u.photosBalcony ? (u.photosBalcony as string[]) : [],
+          gallery: u.gallery ? (u.gallery as string[]) : [],
         };
       });
 
     return {
       id: f.id.replace('floor_', ''),
       name: f.name,
+      level: f.level,
       floorPlanImage: f.imagePath || '',
       units: floorUnits,
     };
@@ -396,17 +403,13 @@ export async function updateUnitState(id: string, newState: string) {
     }
   }
 
-  // If we are updating a duplex (units sharing the same identifier across floors), sync their states
   const [updatedUnit] = await db
     .update(units)
     .set({
       state: newState,
       updatedAt: new Date(),
     })
-    .where(and(
-      eq(units.identifier, original.identifier),
-      isNull(units.deletedAt)
-    ))
+    .where(eq(units.id, id))
     .returning();
 
   await logAction(db, session, "UPDATE", "unit", id, {
@@ -453,4 +456,223 @@ export async function getLogs() {
     .select()
     .from(logs)
     .orderBy(logs.createdAt);
+}
+
+// ----------------------------------------------------
+// URBANIZATION UNITS & FLOORS (OLIMPO TUMBES)
+// ----------------------------------------------------
+
+export interface UrbanizationUnit {
+  id: string;
+  zoneId: "zone-1" | "zone-2" | "zone-3";
+  zoneName: string;
+  kind: "lot" | "apartment";
+
+  // Lotes:
+  blockId?: string;
+  blockLetter?: string;
+  lotNumber?: number;
+  lotPosition?: "Esquinera" | "Medianera";
+
+  // Torres / Departamentos:
+  towerId?: string;
+  towerName?: string;
+  floorLevel?: number;
+  floorName?: string;
+  floorId?: string;
+  apartmentTypeId?: string;
+
+  // Comercial & Atributos:
+  code: string;
+  identifier: string;
+  type: string;
+  areaSqm: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  state: "AVAILABLE" | "RESERVED" | "SOLD" | "COMMON_AREA";
+  buyerName?: string | null;
+  price?: number;
+  tourUrl?: string | null;
+  planImage?: string | null;
+  planImageMeasured?: string | null;
+  gallery?: string[];
+  updatedAt?: Date | null;
+}
+
+export async function getUrbanizationUnitsData(): Promise<UrbanizationUnit[]> {
+  const db = await getDb();
+  const dbUnits = await db
+    .select()
+    .from(units)
+    .where(isNull(units.deletedAt));
+
+  const dbUnitsMap = new Map(dbUnits.map((u) => [u.id, u]));
+  const results: UrbanizationUnit[] = [];
+
+  // 1. Manzanas y Lotes (Zona 1 y Zona 2 - 133 lotes)
+  lotBlocks.forEach((block) => {
+    const zoneId = block.zoneId === ZoneId.ZONE_1 ? "zone-1" : "zone-2";
+    const zoneName = block.zoneId === ZoneId.ZONE_1 ? "Zona 1 (Lotes Oeste)" : "Zona 2 (Lotes Este)";
+
+    block.lots.forEach((lotNumber, index) => {
+      const unitId = `lot:${block.id}-${lotNumber}`;
+      const staticUnit = lotUnits.find((lu) => lu.id === unitId || lu.id === `${block.id}:lot-${lotNumber}`);
+      const dbRecord = dbUnitsMap.get(unitId);
+
+      let state: "AVAILABLE" | "RESERVED" | "SOLD" | "COMMON_AREA" = "AVAILABLE";
+      if (dbRecord?.state) {
+        state = dbRecord.state as any;
+      } else if (staticUnit?.status === UnitStatus.SOLD) {
+        state = "SOLD";
+      } else if (staticUnit?.status === UnitStatus.RESERVED) {
+        state = "RESERVED";
+      }
+
+      const fileNumber = block.firstFileNumber === undefined ? lotNumber : block.firstFileNumber + index;
+      const cleanImg = staticUnit?.planImage || lotPlanImage(block.id, fileNumber);
+      const measuredImg = staticUnit?.planImageMeasured || lotMeasuredPlanImage(block.id, fileNumber);
+
+      results.push({
+        id: unitId,
+        zoneId,
+        zoneName,
+        kind: "lot",
+        blockId: block.id,
+        blockLetter: block.letter,
+        lotNumber,
+        lotPosition: staticUnit?.lotPosition === LotPosition.CORNER ? "Esquinera" : "Medianera",
+        code: `Mz. ${block.letter} Lt. ${String(lotNumber).padStart(2, "0")}`,
+        identifier: `Lote ${lotNumber}`,
+        type: "Lote / Terreno",
+        areaSqm: dbRecord?.areaSqm || staticUnit?.areaSqm || 66,
+        state,
+        buyerName: dbRecord?.buyerName || null,
+        planImage: cleanImg ? getAssetUrl(cleanImg) : null,
+        planImageMeasured: measuredImg ? getAssetUrl(measuredImg) : null,
+        updatedAt: dbRecord?.updatedAt || null,
+      });
+    });
+  });
+
+  // 2. Torres A, B, C (Zona 3 - 60 departamentos + 3 terrazas)
+  towers.forEach((tower) => {
+    const towerName = tower.id === TowerId.TOWER_A ? "Torre A" : tower.id === TowerId.TOWER_B ? "Torre B" : "Torre C";
+
+    tower.floors.forEach((floor) => {
+      const isTerrace = floor.kind === TowerFloorKind.TERRACE;
+      const floorName = isTerrace ? "Terraza / Azotea" : `Piso ${floor.level}`;
+
+      floor.units.forEach((unit) => {
+        const unitId = unit.id; // e.g. "tower-a:unit-101"
+        const dbRecord = dbUnitsMap.get(unitId);
+
+        let state: "AVAILABLE" | "RESERVED" | "SOLD" | "COMMON_AREA" = isTerrace ? "COMMON_AREA" : "AVAILABLE";
+        if (dbRecord?.state) {
+          state = dbRecord.state as any;
+        }
+
+        results.push({
+          id: unitId,
+          zoneId: "zone-3",
+          zoneName: "Zona 3 (Torres Olimpo)",
+          kind: "apartment",
+          towerId: tower.id,
+          towerName,
+          floorLevel: floor.level,
+          floorName,
+          floorId: floor.id,
+          apartmentTypeId: unit.apartmentTypeId,
+          code: `${towerName} · Depa ${unit.identifier}`,
+          identifier: unit.identifier,
+          type: isTerrace ? "Área Común" : "Departamento Flat",
+          areaSqm: dbRecord?.areaSqm || unit.areaSqm || APARTMENT_AREA_SQM,
+          bedrooms: unit.bedrooms || 3,
+          bathrooms: unit.bathrooms || 1,
+          state,
+          buyerName: dbRecord?.buyerName || null,
+          tourUrl: unit.tourUrl || APARTMENT_TOUR_URL,
+          gallery: (unit.gallery || []).map(getAssetUrl),
+          updatedAt: dbRecord?.updatedAt || null,
+        });
+      });
+    });
+  });
+
+  return results;
+}
+
+export async function updateUrbanizationUnitState(
+  unitId: string,
+  newState: "AVAILABLE" | "RESERVED" | "SOLD" | "COMMON_AREA",
+  buyerName?: string | null,
+  unitMeta?: {
+    floorOrBlockId?: string;
+    identifier?: string;
+    areaSqm?: number;
+    type?: string;
+  }
+) {
+  const session = await auth();
+  if (!session) {
+    throw new Error("Unauthorized: Debes iniciar sesión.");
+  }
+
+  const db = await getDb();
+  const [existing] = await db.select().from(units).where(eq(units.id, unitId));
+
+  const currentState = existing?.state || "AVAILABLE";
+
+  const isReversion = (current: string, next: string) => {
+    if (current === "SOLD" && (next === "RESERVED" || next === "AVAILABLE")) return true;
+    if (current === "RESERVED" && next === "AVAILABLE") return true;
+    if (current === "COMMON_AREA" && next !== "COMMON_AREA") return true;
+    return false;
+  };
+
+  if (isReversion(currentState, newState)) {
+    if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "ADMIN") {
+      throw new Error(
+        "Unauthorized: Revertir el estado de una unidad reservada/vendida requiere autorización de Supervisor."
+      );
+    }
+  }
+
+  let updated;
+  if (existing) {
+    [updated] = await db
+      .update(units)
+      .set({
+        state: newState,
+        buyerName: buyerName !== undefined ? buyerName : existing.buyerName,
+        updatedAt: new Date(),
+      })
+      .where(eq(units.id, unitId))
+      .returning();
+  } else {
+    [updated] = await db
+      .insert(units)
+      .values({
+        id: unitId,
+        floorId: unitMeta?.floorOrBlockId || "urbanization",
+        identifier: unitMeta?.identifier || unitId,
+        type: unitMeta?.type || "UNIT",
+        state: newState,
+        buyerName: buyerName || null,
+        areaSqm: unitMeta?.areaSqm || 0,
+        updatedAt: new Date(),
+      })
+      .returning();
+  }
+
+  await logAction(db, session, "UPDATE", "unit", unitId, {
+    identifier: unitMeta?.identifier || unitId,
+    transition: `${currentState} -> ${newState}`,
+    buyerName: buyerName || null,
+    authorizedBy: session.user.name,
+    role: session.user.role,
+  });
+
+  revalidatePath("/dashboard/units");
+  revalidatePath("/", "layout");
+  return updated;
 }

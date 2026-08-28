@@ -8,16 +8,40 @@ import {
 } from "@/lib/db/schema";
 import { and, isNull, ne, gte, lte } from "drizzle-orm";
 
-export const runtime = "edge";
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const dateStr = searchParams.get("date"); // e.g. "2026-06-12"
     const yearStr = searchParams.get("year"); // e.g. "2026"
     const monthStr = searchParams.get("month"); // e.g. "6" (1-12)
+    const typeParam = searchParams.get("type"); // "VIRTUAL" | "IN_PERSON" (optional)
+    const sellerIdParam = searchParams.get("sellerId"); // Filter by specific seller (optional)
+    const sellersParam = searchParams.get("sellers"); // "true" to return active sellers list
+
+    // Keep availability consistent with appointment creation: an availability
+    // is only bookable for a meeting type if it matches that type or is "BOTH".
+    const matchesType = (meetingType: string) =>
+      !typeParam || meetingType === typeParam || meetingType === "BOTH";
 
     const db = await getDb();
+
+    // CASE 0: Return active sellers list (public endpoint for booking UI)
+    if (sellersParam === "true") {
+      const activeSellers = await db
+        .select({ id: users.id, name: users.name })
+        .from(users)
+        .where(isNull(users.deletedAt));
+
+      // Only return sellers who have at least one availability configured
+      const allAvails = await db.select().from(availabilities);
+      const sellersWithAvailability = new Set(allAvails.map((av) => av.userId));
+
+      const sellers = activeSellers
+        .filter((s) => sellersWithAvailability.has(s.id))
+        .map((s) => ({ id: s.id, name: s.name }));
+
+      return NextResponse.json({ sellers });
+    }
 
     // 1. Fetch active sellers
     const activeSellers = await db
@@ -35,7 +59,11 @@ export async function GET(request: Request) {
       .select()
       .from(availabilities);
     
-    const activeAvails = weeklyAvails.filter((av) => activeSellerIds.has(av.userId));
+    // Filter by active sellers, and optionally by a specific seller
+    let activeAvails = weeklyAvails.filter((av) => activeSellerIds.has(av.userId));
+    if (sellerIdParam) {
+      activeAvails = activeAvails.filter((av) => av.userId === sellerIdParam);
+    }
 
     // 3. Fetch all calendar transfers
     const transfers = await db.select().from(calendarTransfers);
@@ -68,14 +96,13 @@ export async function GET(request: Request) {
 
     // CASE 1: Get available hours for a specific date
     if (dateStr) {
-      const targetDate = new Date(dateStr + "T00:00:00");
-      const dayOfWeek = targetDate.getDay(); // 0 = Sunday, 1 = Monday...
+      const targetDate = new Date(dateStr + "T00:00:00-05:00"); // Use Peru midnight
+      const peruTargetDate = new Date(targetDate.getTime() - 5 * 3600000);
+      const dayOfWeek = peruTargetDate.getUTCDay(); // Use Peru weekday
 
-      // Fetch appointments on this day
-      const startOfDay = new Date(targetDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(targetDate);
-      endOfDay.setHours(23, 59, 59, 999);
+      // Fetch appointments on this day in Peru time
+      const startOfDay = new Date(dateStr + "T00:00:00-05:00");
+      const endOfDay = new Date(dateStr + "T23:59:59.999-05:00");
 
       const dayAppointments = await db
         .select()
@@ -89,9 +116,12 @@ export async function GET(request: Request) {
           )
         );
 
-      // Filter availabilities for this day of the week
-      const dayAvails = activeAvails.filter((av) => av.dayOfWeek === dayOfWeek);
+      // Filter availabilities for this day of the week and meeting type
+      const dayAvails = activeAvails.filter(
+        (av) => av.dayOfWeek === dayOfWeek && matchesType(av.meetingType)
+      );
 
+      const nowInPeru = new Date(Date.now() - 5 * 3600000);
       const availableHoursSet = new Set<string>();
 
       for (const avail of dayAvails) {
@@ -105,35 +135,37 @@ export async function GET(request: Request) {
         const duration = avail.slotDuration;
 
         let current = new Date(targetDate);
-        current.setHours(startH, startM, 0, 0);
+        current.setUTCMinutes(current.getUTCMinutes() + (startH * 60 + startM));
 
         const endLimit = new Date(targetDate);
-        endLimit.setHours(endH, endM, 0, 0);
+        endLimit.setUTCMinutes(endLimit.getUTCMinutes() + (endH * 60 + endM));
 
         while (current.getTime() < endLimit.getTime()) {
-          const timeLabel = current.toLocaleTimeString("es-ES", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          });
+          const slotPeru = new Date(current.getTime() - 5 * 3600000);
+
+          // Skip past slots
+          if (slotPeru.getTime() <= nowInPeru.getTime()) {
+            current.setUTCMinutes(current.getUTCMinutes() + duration);
+            continue;
+          }
+
+          const timeLabel = `${String(slotPeru.getUTCHours()).padStart(2, "0")}:${String(slotPeru.getUTCMinutes()).padStart(2, "0")}`;
 
           // Check if this effective seller has a booking at this time
           const isBusy = dayAppointments.some((app) => {
             const appDate = new Date(app.date);
-            const appTimeLabel = appDate.toLocaleTimeString("es-ES", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: false,
-            });
-            // Match same time label and seller
-            return appTimeLabel === timeLabel && app.sellerId === effectiveSellerId;
+            const appPeruDate = new Date(appDate.getTime() - 5 * 3600000);
+            const appTimeLabel = `${String(appPeruDate.getUTCHours()).padStart(2, "0")}:${String(appPeruDate.getUTCMinutes()).padStart(2, "0")}`;
+            const appEffectiveSellerId = resolveEffectiveSeller(app.sellerId, targetDate);
+            // Match same time label and seller (original or effective)
+            return appTimeLabel === timeLabel && (appEffectiveSellerId === effectiveSellerId || app.sellerId === effectiveSellerId);
           });
 
           if (!isBusy) {
             availableHoursSet.add(timeLabel);
           }
 
-          current.setMinutes(current.getMinutes() + duration);
+          current.setUTCMinutes(current.getUTCMinutes() + duration);
         }
       }
 
@@ -145,13 +177,15 @@ export async function GET(request: Request) {
     if (yearStr && monthStr) {
       const year = parseInt(yearStr);
       const month = parseInt(monthStr) - 1; // 0-11
-      const numDays = new Date(year, month + 1, 0).getDate();
+      const numDays = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
       const availableDays: number[] = [];
 
-      // Fetch all appointments in this month to avoid repetitive DB queries
-      const startOfMonth = new Date(year, month, 1, 0, 0, 0, 0);
-      const endOfMonth = new Date(year, month, numDays, 23, 59, 59, 999);
+      // Fetch all appointments in this month to avoid repetitive DB queries in Peru timezone boundaries
+      const startOfMonthStr = `${year}-${String(month + 1).padStart(2, '0')}-01T00:00:00-05:00`;
+      const endOfMonthStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(numDays).padStart(2, '0')}T23:59:59.999-05:00`;
+      const startOfMonth = new Date(startOfMonthStr);
+      const endOfMonth = new Date(endOfMonthStr);
 
       const monthAppointments = await db
         .select()
@@ -165,27 +199,31 @@ export async function GET(request: Request) {
           )
         );
 
+      const nowInPeru = new Date(Date.now() - 5 * 3600000);
+      const todayInPeru = new Date(Date.UTC(nowInPeru.getUTCFullYear(), nowInPeru.getUTCMonth(), nowInPeru.getUTCDate()));
+
       for (let day = 1; day <= numDays; day++) {
-        const currentDate = new Date(year, month, day);
+        const currentDate = new Date(Date.UTC(year, month, day));
         // Skip past dates (only allow bookings for today onwards)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (currentDate.getTime() < today.getTime()) {
+        if (currentDate.getTime() < todayInPeru.getTime()) {
           continue;
         }
 
-        const dayOfWeek = currentDate.getDay();
-        const dayAvails = activeAvails.filter((av) => av.dayOfWeek === dayOfWeek);
+        const dayOfWeek = currentDate.getUTCDay();
+        const dayAvails = activeAvails.filter(
+          (av) => av.dayOfWeek === dayOfWeek && matchesType(av.meetingType)
+        );
 
         if (dayAvails.length === 0) continue;
 
-        // Filter appointments on this specific day
+        // Filter appointments on this specific day in Peru timezone
         const dayAppointments = monthAppointments.filter((app) => {
           const appDate = new Date(app.date);
+          const appPeruDate = new Date(appDate.getTime() - 5 * 3600000);
           return (
-            appDate.getFullYear() === year &&
-            appDate.getMonth() === month &&
-            appDate.getDate() === day
+            appPeruDate.getUTCFullYear() === year &&
+            appPeruDate.getUTCMonth() === month &&
+            appPeruDate.getUTCDate() === day
           );
         });
 
@@ -200,27 +238,30 @@ export async function GET(request: Request) {
           const [endH, endM] = avail.endTime.split(":").map(Number);
           const duration = avail.slotDuration;
 
-          let current = new Date(currentDate);
-          current.setHours(startH, startM, 0, 0);
+          let current = new Date(Date.UTC(year, month, day, 5, 0, 0, 0)); // 00:00 Peru is 05:00 UTC
+          current.setUTCMinutes(current.getUTCMinutes() + (startH * 60 + startM));
 
-          const endLimit = new Date(currentDate);
-          endLimit.setHours(endH, endM, 0, 0);
+          const endLimit = new Date(Date.UTC(year, month, day, 5, 0, 0, 0));
+          endLimit.setUTCMinutes(endLimit.getUTCMinutes() + (endH * 60 + endM));
 
           while (current.getTime() < endLimit.getTime()) {
-            const timeLabel = current.toLocaleTimeString("es-ES", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: false,
-            });
+            const slotPeru = new Date(current.getTime() - 5 * 3600000);
+
+            // Skip past slots
+            if (slotPeru.getTime() <= nowInPeru.getTime()) {
+              current.setUTCMinutes(current.getUTCMinutes() + duration);
+              continue;
+            }
+
+            const timeLabel = `${String(slotPeru.getUTCHours()).padStart(2, "0")}:${String(slotPeru.getUTCMinutes()).padStart(2, "0")}`;
 
             const isBusy = dayAppointments.some((app) => {
               const appDate = new Date(app.date);
-              const appTimeLabel = appDate.toLocaleTimeString("es-ES", {
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              });
-              return appTimeLabel === timeLabel && app.sellerId === effectiveSellerId;
+              const appPeruDate = new Date(appDate.getTime() - 5 * 3600000);
+              const appTimeLabel = `${String(appPeruDate.getUTCHours()).padStart(2, "0")}:${String(appPeruDate.getUTCMinutes()).padStart(2, "0")}`;
+              const appEffectiveSellerId = resolveEffectiveSeller(app.sellerId, currentDate);
+              // Match same time label and seller (original or effective)
+              return appTimeLabel === timeLabel && (appEffectiveSellerId === effectiveSellerId || app.sellerId === effectiveSellerId);
             });
 
             if (!isBusy) {
@@ -228,7 +269,7 @@ export async function GET(request: Request) {
               break;
             }
 
-            current.setMinutes(current.getMinutes() + duration);
+            current.setUTCMinutes(current.getUTCMinutes() + duration);
           }
 
           if (dayHasFreeSlot) break;

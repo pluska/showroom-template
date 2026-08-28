@@ -16,6 +16,7 @@ import { auth as nextAuth } from "@/auth";
 import { Resend } from "resend";
 import AppointmentEmail from "@/components/emails/AppointmentEmail";
 import config from "@/config/config";
+import { createGoogleMeetEvent } from "@/utils/googleMeet";
 
 // Helper to get logged-in user or mock for local development
 async function getSessionUser(db: any) {
@@ -215,10 +216,14 @@ export async function getAppointments(sellerId?: string) {
 
   const isUserAdmin = currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
 
-  // Fetch all users to create a map of roles to filter out SUPER_ADMIN appointments for ADMIN users
-  const allUsers = await db.select({ id: users.id, role: users.role }).from(users);
+  // Fetch all users to create a map of roles and names to filter out SUPER_ADMIN appointments for ADMIN users
+  const allUsers = await db.select({ id: users.id, role: users.role, name: users.name }).from(users);
   const userRolesMap = new Map<string, string>();
-  allUsers.forEach((u) => userRolesMap.set(u.id, u.role || "SELLER"));
+  const userNamesMap = new Map<string, string>();
+  allUsers.forEach((u) => {
+    userRolesMap.set(u.id, u.role || "SELLER");
+    userNamesMap.set(u.id, u.name || "Vendedor");
+  });
 
   // Map and filter results
   let mapped = rows.map(({ appointment, prospect }) => {
@@ -230,6 +235,8 @@ export async function getAppointments(sellerId?: string) {
       prospect: prospect ? { ...prospect, units: pUnits } : null,
       effectiveSellerId,
       isTransferred: effectiveSellerId !== appointment.sellerId,
+      sellerName: userNamesMap.get(appointment.sellerId) || "Desconocido",
+      effectiveSellerName: userNamesMap.get(effectiveSellerId) || "Desconocido",
     };
   });
 
@@ -267,8 +274,13 @@ export async function createAppointment(data: {
   notes?: string;
   sendEmail: boolean;
 }) {
-  const db = await getDb();
-  const bookingDate = new Date(data.date);
+  try {
+    const db = await getDb();
+    const bookingDate = new Date(data.date);
+
+    if (bookingDate.getTime() <= Date.now()) {
+      throw new Error("No se pueden programar citas en el pasado.");
+    }
 
   // 1. Manage Prospect
   let prospectId = "";
@@ -305,10 +317,27 @@ export async function createAppointment(data: {
 
   // 2. Link Units of Interest
   if (data.unitsOfInterest && data.unitsOfInterest.length > 0) {
+    // `prospectUnits.unitId` es FK contra `units.id`. Hoy el único formulario
+    // que llena `unitsOfInterest` ya restringe la selección a unidades que
+    // existen en la tabla (ver getUnits() en el dashboard/contacto), pero esta
+    // función también se expone vía /api/calendar/appointment sin validar el
+    // body — un id que no exista todavía como fila (p.ej. un lote o depa de
+    // zona 1/2/3 que nunca se tocó desde el dashboard, mismo caso que
+    // updateUrbanizationUnitState) tumbaría el insert con "FOREIGN KEY
+    // constraint failed". Se filtra contra la tabla antes de insertar, igual
+    // que ya hace getPageViewStats en analytics.ts, en vez de confiar en que
+    // el llamador solo mande ids válidos.
+    const existingUnits = await db
+      .select({ id: units.id })
+      .from(units)
+      .where(inArray(units.id, data.unitsOfInterest));
+    const validUnitIds = new Set(existingUnits.map((u) => u.id));
+
     // Delete existing links for this prospect
     await db.delete(prospectUnits).where(eq(prospectUnits.prospectId, prospectId));
-    // Insert new links
+    // Insert new links, solo para las unidades que sí existen
     for (const uId of data.unitsOfInterest) {
+      if (!validUnitIds.has(uId)) continue;
       await db.insert(prospectUnits).values({
         prospectId,
         unitId: uId,
@@ -321,12 +350,10 @@ export async function createAppointment(data: {
 
   if (!finalSellerId) {
     // PUBLIC BOOKING: Find available seller
-    const dayOfWeek = bookingDate.getDay();
-    const timeStr = bookingDate.toLocaleTimeString("es-ES", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }); // e.g. "10:30"
+    const bookingPeruDate = new Date(bookingDate.getTime() - 5 * 3600000);
+    const dayOfWeek = bookingPeruDate.getUTCDay();
+    // Use a locale-independent approach to avoid Cloudflare V8 runtime locale issues
+    const timeStr = `${String(bookingPeruDate.getUTCHours()).padStart(2, "0")}:${String(bookingPeruDate.getUTCMinutes()).padStart(2, "0")}`; // e.g. "10:30"
 
     // Get all sellers' weekly availabilities for this day of week
     const allAvails = await db
@@ -377,8 +404,18 @@ export async function createAppointment(data: {
     }
 
     // Find if candidates have conflicts (appointments already booked at this exact time)
-    const candidates = Array.from(effectiveCandidatesMap.values());
-    const conflictingAppointments = await db
+    // We compare by hour:minute string to avoid millisecond mismatches
+    const bookingTimeStr = `${String(bookingPeruDate.getUTCHours()).padStart(2, "0")}:${String(bookingPeruDate.getUTCMinutes()).padStart(2, "0")}`;
+
+    // Fetch all appointments on this day (not just exact datetime) to compare by time string
+    const bookingYear = bookingPeruDate.getUTCFullYear();
+    const bookingMonth = bookingPeruDate.getUTCMonth();
+    const bookingDay = bookingPeruDate.getUTCDate();
+
+    const startOfBookingDay = new Date(`${bookingYear}-${String(bookingMonth + 1).padStart(2, '0')}-${String(bookingDay).padStart(2, '0')}T00:00:00-05:00`);
+    const endOfBookingDay = new Date(`${bookingYear}-${String(bookingMonth + 1).padStart(2, '0')}-${String(bookingDay).padStart(2, '0')}T23:59:59.999-05:00`);
+
+    const dayAppointments = await db
       .select({
         sellerId: appointments.sellerId,
         date: appointments.date,
@@ -386,18 +423,31 @@ export async function createAppointment(data: {
       .from(appointments)
       .where(
         and(
-          eq(appointments.date, bookingDate),
+          gte(appointments.date, startOfBookingDay),
+          lte(appointments.date, endOfBookingDay),
           ne(appointments.status, "CANCELLED"),
           isNull(appointments.deletedAt)
         )
       );
 
-    const conflictingSellerIds = new Set(
-      conflictingAppointments.map((a) => a.sellerId)
-    );
+    // Resolve effective seller for each existing appointment and collect busy effective IDs at the same time slot
+    const busyEffectiveSellerIds = new Set<string>();
+    for (const appt of dayAppointments) {
+      const apptDate = new Date(appt.date);
+      const apptPeruDate = new Date(apptDate.getTime() - 5 * 3600000);
+      const apptTimeStr = `${String(apptPeruDate.getUTCHours()).padStart(2, "0")}:${String(apptPeruDate.getUTCMinutes()).padStart(2, "0")}`;
+      if (apptTimeStr === bookingTimeStr) {
+        const effId = await getEffectiveSellerId(db, appt.sellerId, bookingDate);
+        busyEffectiveSellerIds.add(effId);
+        // Also add the original seller ID in case they were not transferred
+        busyEffectiveSellerIds.add(appt.sellerId);
+      }
+    }
 
-    // Find first seller without conflict
-    const freeSeller = candidates.find((sellerId) => !conflictingSellerIds.has(sellerId));
+    const candidates = Array.from(effectiveCandidatesMap.values());
+
+    // Find first effective seller without conflict
+    const freeSeller = candidates.find((sellerId) => !busyEffectiveSellerIds.has(sellerId));
 
     if (!freeSeller) {
       throw new Error("Todos los asesores están ocupados en el horario solicitado. Por favor elige otra hora.");
@@ -407,6 +457,36 @@ export async function createAppointment(data: {
   } else {
     // Direct scheduling: Check for active transfers
     finalSellerId = await getEffectiveSellerId(db, finalSellerId, bookingDate);
+  }
+
+  // Get seller details before inserting (needed for Google Calendar invite & email)
+  const sellerArr = await db.select().from(users).where(eq(users.id, finalSellerId));
+  const seller = sellerArr[0];
+
+  // Generate Google Meet Link if virtual
+  let meetLink: string | null = null;
+  if (data.type === "VIRTUAL") {
+    try {
+      const title = `Cita Virtual - ${data.prospectName} y ${seller?.name || "Asesor"}`;
+      const description = `Reunión virtual para conocer el proyecto ${config.company?.buildingName || config.appName}.\n\nAsesor: ${seller?.name || "Asesor Inmobiliario"} (${seller?.email || "N/A"})\nProspecto: ${data.prospectName} (${data.prospectEmail})`;
+      
+      meetLink = await createGoogleMeetEvent({
+        summary: title,
+        description,
+        startDate: bookingDate,
+        durationMinutes: 30,
+        prospectEmail: data.prospectEmail,
+        prospectName: data.prospectName,
+        sellerEmail: seller?.email || "",
+        sellerName: seller?.name || "Asesor Inmobiliario",
+      });
+    } catch (meetErr: any) {
+      // Degradación segura: si Google no está configurado o falla, la cita se
+      // agenda igual sin enlace y se notifica por correo como antes. Evita que
+      // una credencial ausente bloquee el agendamiento de prospectos reales.
+      console.error("Error al generar el enlace de Google Meet:", meetErr);
+      meetLink = null;
+    }
   }
 
   // 4. Create Appointment
@@ -423,15 +503,15 @@ export async function createAppointment(data: {
       prospectId,
       sendEmail: data.sendEmail,
       status: "SCHEDULED",
+      meetLink,
     })
     .returning();
 
-  // 5. Send Email Notifications
-  if (data.sendEmail) {
+  // 5. Send Email Notifications. Las citas VIRTUAL normalmente las notifica
+  // Google Calendar con su propia invitación; solo enviamos correo si no se
+  // pudo generar el Meet, para que el prospecto no se quede sin aviso.
+  if (data.sendEmail && (data.type === "IN_PERSON" || !meetLink)) {
     try {
-      const sellerArr = await db.select().from(users).where(eq(users.id, finalSellerId));
-      const seller = sellerArr[0];
-
       // Get unit identifiers of interest
       let unitIdentifiers: string[] = [];
       if (data.unitsOfInterest && data.unitsOfInterest.length > 0) {
@@ -446,14 +526,20 @@ export async function createAppointment(data: {
       if (resendApiKey) {
         const resend = new Resend(resendApiKey);
 
-        // Sender Configuration (Fallback to default if project doesn't have custom config)
-        const fromEmail = "Santa Fe 190 <no-reply@kayen.work>";
+        // Remitente y dirección de baja salen de la config, que apunta al
+        // dominio verificado en Resend.
+        const fromEmail = config.resend.fromNoReply;
+        const unsubscribeHeaders = {
+          "List-Unsubscribe": `<mailto:no-reply@${config.domainName}?subject=unsubscribe>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        };
 
         // Send to prospect
         await resend.emails.send({
           from: fromEmail,
           to: [data.prospectEmail.trim().toLowerCase()],
-          subject: `Confirmación de Cita - ${config.company?.buildingName || "Santa Fe 190"}`,
+          subject: `Confirmación de Cita - ${config.company?.buildingName || config.appName}`,
+          headers: unsubscribeHeaders,
           react: AppointmentEmail({
             prospectName: data.prospectName,
             prospectEmail: data.prospectEmail,
@@ -463,7 +549,7 @@ export async function createAppointment(data: {
             type: data.type,
             units: unitIdentifiers,
             sellerName: seller?.name || "Asesor Inmobiliario",
-            sellerEmail: seller?.email || "ventas@santafe.com",
+            sellerEmail: seller?.email || config.company.email,
             isForSeller: false,
           }),
         });
@@ -474,6 +560,7 @@ export async function createAppointment(data: {
             from: fromEmail,
             to: [seller.email],
             subject: `Nueva Cita Asignada - ${data.prospectName}`,
+            headers: unsubscribeHeaders,
             react: AppointmentEmail({
               prospectName: data.prospectName,
               prospectEmail: data.prospectEmail,
@@ -496,9 +583,13 @@ export async function createAppointment(data: {
     }
   }
 
-  revalidatePath("/dashboard/calendar");
-  revalidatePath("/contact");
-  return newAppointment;
+    revalidatePath("/dashboard/calendar");
+    revalidatePath("/contact");
+    return { success: true, appointment: newAppointment };
+  } catch (error: any) {
+    console.error("Error creating appointment:", error);
+    return { success: false, error: error.message || "Error al procesar la cita" };
+  }
 }
 
 export async function updateAppointmentStatus(id: string, status: "SCHEDULED" | "COMPLETED" | "CANCELLED") {
@@ -520,6 +611,36 @@ export async function updateAppointmentNotes(id: string, notes: string) {
     .update(appointments)
     .set({
       notes,
+      updatedAt: new Date(),
+    })
+    .where(eq(appointments.id, id));
+
+  revalidatePath("/dashboard/calendar");
+}
+
+export async function updateAppointmentSeller(id: string, sellerId: string) {
+  const db = await getDb();
+  const currentUser = await getSessionUser(db);
+  if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
+    throw new Error("Solo los administradores pueden traspasar citas.");
+  }
+
+  // Admin cannot transfer appointment to/from a Super Admin user
+  if (currentUser.role === "ADMIN") {
+    const appt = await db.select().from(appointments).where(eq(appointments.id, id));
+    if (appt.length > 0) {
+      const fromUserArr = await db.select().from(users).where(eq(users.id, appt[0].sellerId));
+      const toUserArr = await db.select().from(users).where(eq(users.id, sellerId));
+      if ((fromUserArr[0] && fromUserArr[0].role === "SUPER_ADMIN") || (toUserArr[0] && toUserArr[0].role === "SUPER_ADMIN")) {
+        throw new Error("Unauthorized");
+      }
+    }
+  }
+
+  await db
+    .update(appointments)
+    .set({
+      sellerId,
       updatedAt: new Date(),
     })
     .where(eq(appointments.id, id));
@@ -553,6 +674,39 @@ export async function getAvailabilities(userId?: string) {
     .from(availabilities)
     .where(eq(availabilities.userId, resolvedUserId))
     .orderBy(availabilities.dayOfWeek, availabilities.startTime);
+}
+
+export async function getAllAvailabilities() {
+  const db = await getDb();
+  const currentUser = await getSessionUser(db);
+  if (currentUser.role !== "SUPER_ADMIN" && currentUser.role !== "ADMIN") {
+    throw new Error("Unauthorized");
+  }
+
+  // Fetch all availabilities linked to active (non-deleted) users
+  let list = await db
+    .select({
+      id: availabilities.id,
+      userId: availabilities.userId,
+      dayOfWeek: availabilities.dayOfWeek,
+      startTime: availabilities.startTime,
+      endTime: availabilities.endTime,
+      slotDuration: availabilities.slotDuration,
+      meetingType: availabilities.meetingType,
+      userName: users.name,
+      userRole: users.role,
+    })
+    .from(availabilities)
+    .innerJoin(users, eq(availabilities.userId, users.id))
+    .where(isNull(users.deletedAt))
+    .orderBy(availabilities.dayOfWeek, availabilities.startTime);
+
+  // If Admin, filter out availabilities involving Super Admin
+  if (currentUser.role === "ADMIN") {
+    list = list.filter((a) => a.userRole !== "SUPER_ADMIN");
+  }
+
+  return list;
 }
 
 export async function saveAvailabilities(userId: string, slotsData: {
@@ -627,8 +781,12 @@ export async function transferCalendar(data: {
       throw new Error("Unauthorized");
     }
   }
-  const start = new Date(data.startDate);
-  const end = new Date(data.endDate);
+  const start = typeof data.startDate === "string" && data.startDate.length === 10
+    ? new Date(`${data.startDate}T00:00:00-05:00`)
+    : new Date(data.startDate);
+  const end = typeof data.endDate === "string" && data.endDate.length === 10
+    ? new Date(`${data.endDate}T23:59:59.999-05:00`)
+    : new Date(data.endDate);
 
   if (data.isDefinitive) {
     // DEFINITIVE TRANSFER: Update all appointments directly in the DB
@@ -698,4 +856,75 @@ export async function deleteTransfer(id: string) {
   await db.delete(calendarTransfers).where(eq(calendarTransfers.id, id));
 
   revalidatePath("/dashboard/calendar");
+}
+
+export async function createProspectAction(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  unitId?: string;
+}) {
+  const db = await getDb();
+  let prospectId = "";
+
+  const cleanEmail = data.email.trim().toLowerCase();
+  const existingProspects = await db
+    .select()
+    .from(prospects)
+    .where(eq(prospects.email, cleanEmail));
+
+  if (existingProspects.length > 0) {
+    prospectId = existingProspects[0].id;
+    await db
+      .update(prospects)
+      .set({
+        name: data.name,
+        phone: data.phone || existingProspects[0].phone,
+        address: data.address || existingProspects[0].address,
+        updatedAt: new Date(),
+      })
+      .where(eq(prospects.id, prospectId));
+  } else {
+    const [newProspect] = await db
+      .insert(prospects)
+      .values({
+        name: data.name,
+        email: cleanEmail,
+        phone: data.phone || null,
+        address: data.address || null,
+      })
+      .returning();
+    prospectId = newProspect.id;
+  }
+
+  if (data.unitId) {
+    // Check if the link already exists
+    const existingLinks = await db
+      .select()
+      .from(prospectUnits)
+      .where(
+        and(
+          eq(prospectUnits.prospectId, prospectId),
+          eq(prospectUnits.unitId, data.unitId)
+        )
+      );
+    if (existingLinks.length === 0) {
+      // `prospectUnits.unitId` es FK contra `units.id` — si `data.unitId` no
+      // existe como fila (id viejo/stale del cliente, o algún día un id de
+      // zona 1/2/3 nunca tocado en el dashboard) el insert tumbaría toda la
+      // creación del prospecto con "FOREIGN KEY constraint failed". Se
+      // verifica antes en vez de asumir que el id que manda el formulario
+      // siempre es válido.
+      const [existingUnit] = await db.select({ id: units.id }).from(units).where(eq(units.id, data.unitId));
+      if (existingUnit) {
+        await db.insert(prospectUnits).values({
+          prospectId,
+          unitId: data.unitId,
+        });
+      }
+    }
+  }
+
+  return { success: true, prospectId };
 }

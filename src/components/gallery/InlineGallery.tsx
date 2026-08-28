@@ -6,9 +6,10 @@ import GalleryViewer from './GalleryViewer';
 interface InlineGalleryProps {
   images: GalleryImage[];
   showInfo?: boolean;
+  onOpenSidebar?: () => void;
 }
 
-const InlineGallery: React.FC<InlineGalleryProps> = ({ images, showInfo = true }) => {
+const InlineGallery: React.FC<InlineGalleryProps> = ({ images, showInfo = true, onOpenSidebar }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [isHoveringRoomBtn, setIsHoveringRoomBtn] = useState(false);
@@ -107,6 +108,7 @@ const InlineGallery: React.FC<InlineGalleryProps> = ({ images, showInfo = true }
         initialIndex={safeIndex}
         isOpen={isViewerOpen}
         onClose={() => setIsViewerOpen(false)}
+        onOpenSidebar={onOpenSidebar}
         showInfo={showInfo}
       />
 

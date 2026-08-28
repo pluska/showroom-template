@@ -1,6 +1,7 @@
 export interface GalleryImage {
   id: string;
   src: string;
+  srcNight?: string;
   alt: string;
   title?: string;
   description?: string;

@@ -1,15 +1,21 @@
 "use client";
 
 import { deleteUser, updateUser } from "@/app/actions/user";
-import { Trash2, X, AlertTriangle, Edit, User, Mail, Lock, Eye, EyeOff, Shield, Users, Loader2, AlertCircle } from "lucide-react";
+import { Trash2, X, AlertTriangle, Check, Edit, User, Mail, Lock, Eye, EyeOff, Shield, Users, Loader2, AlertCircle } from "lucide-react";
 import { useState, useTransition } from "react";
 
 interface UserListProps {
   users: any[];
   isSuperAdmin: boolean;
+  isAdmin?: boolean;
 }
 
-export default function UserList({ users, isSuperAdmin }: UserListProps) {
+export default function UserList({ users, isSuperAdmin, isAdmin }: UserListProps) {
+  // El SUPER_ADMIN elimina a cualquiera; un ADMIN solo puede eliminar vendedores.
+  // La misma regla se valida en el servidor (deleteUser), esto es solo la UI.
+  const canDelete = (target: any) =>
+    isSuperAdmin || (Boolean(isAdmin) && target?.role === "SELLER");
+
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [userToDelete, setUserToDelete] = useState<any | null>(null);
   const [transferToId, setTransferToId] = useState<string>("");
@@ -33,6 +39,12 @@ export default function UserList({ users, isSuperAdmin }: UserListProps) {
   });
   const [editError, setEditError] = useState("");
   const [updating, setUpdating] = useState(false);
+
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   const handleOpenEditModal = (user: any) => {
     setEditingUser(user);
@@ -72,7 +84,7 @@ export default function UserList({ users, isSuperAdmin }: UserListProps) {
         await deleteUser(userToDelete.id, transferToId || undefined);
         setUserToDelete(null);
       } catch (error: any) {
-        alert("Error al eliminar usuario: " + error.message);
+        showNotification("error", "Error al eliminar usuario: " + error.message);
       } finally {
         setDeletingId(null);
       }
@@ -80,6 +92,17 @@ export default function UserList({ users, isSuperAdmin }: UserListProps) {
   };
 
   return (
+    <>
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <Check className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
     <div className="overflow-x-auto">
       <table className="table table-zebra w-full">
         <thead>
@@ -115,8 +138,8 @@ export default function UserList({ users, isSuperAdmin }: UserListProps) {
                   >
                     <Edit className="w-3.5 h-3.5" />
                   </button>
-                  {isSuperAdmin && (
-                    <button 
+                  {canDelete(user) && (
+                    <button
                       onClick={() => handleOpenDeleteModal(user)}
                       disabled={deletingId === user.id}
                       className="btn btn-ghost btn-xs text-error hover:bg-error/10"
@@ -398,7 +421,8 @@ export default function UserList({ users, isSuperAdmin }: UserListProps) {
           </div>
           <div className="modal-backdrop bg-black/60 backdrop-blur-sm" onClick={() => !updating && setEditingUser(null)} />
         </div>
-      )}      
+      )}
     </div>
+    </>
   );
 }

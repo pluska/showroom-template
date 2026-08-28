@@ -3,7 +3,6 @@ import MapDashboard from "@/components/dashboard/map/MapDashboard";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
-export const runtime = "edge";
 
 export default async function MapPage() {
   const session = await auth();

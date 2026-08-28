@@ -9,11 +9,8 @@ const FloorSelector = () => {
     const floorId = params.floorId as string;
     const floorsData = useStore(state => state.floorsData);
 
-    // Sort floors descending (e.g. 9 down to 1, then PB)
-    const sortedFloors = [...floorsData].sort((a, b) => {
-        const getVal = (id: string) => id.toLowerCase() === 'pb' ? 0 : Number(id);
-        return getVal(b.id) - getVal(a.id);
-    });
+    // Sort floors descending (highest level first)
+    const sortedFloors = [...floorsData].sort((a, b) => b.level - a.level);
     
     // Store Actions
     const setFloor = useStore(state => state.setFloor);

@@ -2,10 +2,25 @@
 
 When modifying or expanding this project, AI agents MUST adhere to the following rules to maintain template integrity and "clone-and-fill" compatibility.
 
+## 0. Terminología y cantidades (variante horizontal)
+- **NUNCA** escribas un nombre visible ("Lado 1", "Fase 2", "Torre A") dentro de
+  un componente. Usa el enum + su catálogo de etiquetas en
+  `src/data/urbanization/enums.ts`. El cliente ya avisó que estos nombres pueden
+  cambiar.
+- **NUNCA** asumas cantidades: ni cuántos lados, ni cuántas fases, zonas o
+  torres, ni que la cuadrícula sea 2×2. Los datos de ejemplo de esta branch
+  traen unas cifras concretas y el siguiente proyecto traerá otras. Recorre
+  siempre las listas declaradas y deriva los controles (chevrons, flechas) con
+  los helpers de `navigation.ts`.
+- El giro entre **lados** es cíclico; el desplazamiento dentro de una **zona** y
+  el salto entre **torres** no lo son.
+- El salto lateral entre torres **conserva el piso**. No lo reimplementes:
+  usa `resolveTowerSwitch()`.
+
 ## 1. Do Not Hardcode Assets
 - **NEVER** use direct local paths or hardcoded URLs for images/videos in components.
 - **ALWAYS** use `getAssetUrl(path)` from `@/utils/assets`.
-- Ensure all new assets are added to the appropriate data file (`buildingData.ts`, `floors.ts`, etc.).
+- Ensure all new assets are added to the appropriate data file (`src/data/urbanization/assets.ts`, `buildingData.ts`, `floors.ts`, etc.).
 
 ## 2. Maintain Interface Parity
 - When updating data structures in `src/data/`, ensure the TypeScript interfaces are updated consistently across the project.
@@ -29,3 +44,10 @@ When modifying or expanding this project, AI agents MUST adhere to the following
 
 ## 7. Build Verification
 - After any structural change, **ALWAYS** run `npm run build` to ensure the template still compiles correctly.
+
+## 8. Secretos
+- **NUNCA** commitees hashes de contraseñas, tokens, ids de base de datos ni
+  dominios de bucket. `src/lib/db/insert-users.sql` se queda con placeholders;
+  las credenciales reales viven en `.users.local.sql`, que está en `.gitignore`.
+- Ningún valor por defecto debe apuntar al bucket o a la base de otro proyecto:
+  es mejor que falle a la vista a que cargue en silencio datos ajenos.

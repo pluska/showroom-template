@@ -26,6 +26,7 @@ export const appointments = sqliteTable('appointments', {
   sendEmail: integer('send_email', { mode: 'boolean' }).default(true).notNull(),
   status: text('status').default('SCHEDULED').notNull(), // 'SCHEDULED', 'COMPLETED', 'CANCELLED'
   notes: text('notes'),
+  meetLink: text('meet_link'),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }),
@@ -44,14 +45,16 @@ export const floors = sqliteTable('floors', {
 
 export const units = sqliteTable('units', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-  floorId: text('floor_id').references(() => floors.id).notNull(),
+  // No es un FK real hacia `floors`: además de las plantas del edificio de
+  // apartamentos (floor_1, floor_S1…), aquí también se guardan lotes de
+  // manzana ("mz-o") y pisos de torre ("tower-a:floor-3") — ids de otro
+  // sistema (`src/data/urbanization`) que nunca existieron como fila en
+  // `floors`. Con la FK puesta, `updateUrbanizationUnitState` (src/app/actions/units.ts)
+  // fallaba con "FOREIGN KEY constraint failed" al crear el primer registro
+  // de un lote o departamento de zona 1/2/3.
+  floorId: text('floor_id').notNull(),
   identifier: text('identifier').notNull(),
   type: text('type'),
-  // TODO: There is no real subcategory field to distinguish a "Flat" from a "Duplex".
-  // It is currently *inferred* (in src/app/contact/page.tsx a duplex = same identifier
-  // spanning more than one floor; in getFloorsData it is hardcoded as identifier === '801').
-  // Proper fix: add a dedicated field here, e.g. `subtype: text('subtype')` ('FLAT' | 'DUPLEX'),
-  // expose it in the units dashboard, and stop inferring it across the app.
   bedrooms: integer('bedrooms'),
   bathrooms: integer('bathrooms'),
   areaSqm: integer('area_sqm'),
@@ -104,6 +107,7 @@ export const media = sqliteTable('media', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   title: text('title').notNull(),
   url: text('url').notNull(),
+  urlNight: text('url_night'),
   type: text('type'),
   category: text('category').default('EXTRA').notNull(), // 'VIDEO_SIDEBAR', 'AMENITIES_GALLERY', 'EXTRA'
   isActive: integer('is_active', { mode: 'boolean' }).default(false).notNull(),
@@ -219,5 +223,65 @@ export const calendarTransfers = sqliteTable('calendar_transfers', {
   endDate: integer('end_date', { mode: 'timestamp' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 });
+
+export const pageViews = sqliteTable('page_views', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  path: text('path').notNull(),
+  unitId: text('unit_id').references(() => units.id),
+  deviceType: text('device_type').notNull(), // 'mobile', 'tablet', 'desktop'
+  duration: integer('duration').default(0), // in seconds
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const socialContent = sqliteTable('social_content', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  title: text('title').notNull(),
+  platform: text('platform').notNull(), // 'facebook', 'instagram', 'tiktok', 'linkedin'
+  templateType: text('template_type').notNull(), // 'post_square', 'post_horizontal', 'story', 'reel_cover'
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  aspectRatio: text('aspect_ratio').notNull(), // '1:1', '1.91:1', '9:16', '4:5'
+  prompt: text('prompt'),
+  resultUrl: text('result_url'),
+  referenceUrls: text('reference_urls', { mode: 'json' }), // string[]
+  status: text('status').default('DRAFT').notNull(), // 'DRAFT', 'GENERATING', 'COMPLETED', 'FAILED'
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+});
+
+// Plantillas de lienzo guardadas por el usuario: conservan la medida del
+// canvas y la posición/estilo de los textos; los medios se agregan al usarla
+export const canvasTemplates = sqliteTable('canvas_templates', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  aspectRatio: text('aspect_ratio').notNull(), // '1:1', '1.91:1', '9:16', '4:5'
+  layout: text('layout', { mode: 'json' }).notNull(), // { version, texts: [{ text, color, fontSize, x, y }] }
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+});
+
+// Una fila por imagen realmente generada con IA (los fallbacks no cuentan).
+// Es la fuente del tope mensual: se cuentan las filas del mes en curso.
+export const imageGenerations = sqliteTable('image_generations', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  socialContentId: text('social_content_id').references(() => socialContent.id),
+  engine: text('engine').notNull(), // 'openai' | 'gemini'
+  createdBy: text('created_by').references(() => users.id),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const socialContentMessages = sqliteTable('social_content_messages', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  socialContentId: text('social_content_id').references(() => socialContent.id).notNull(),
+  sender: text('sender').notNull(), // 'USER', 'AI'
+  text: text('text').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
 
 

@@ -1,7 +1,8 @@
 import React, { useEffect, useCallback } from 'react';
 import type { GalleryImage } from '../../data/galleries';
-import { Menu, ChevronLeft, ChevronRight, Minimize2 } from 'lucide-react';
+import { Menu, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { preloadImages } from '../../utils/preload';
+import FullScreenToggle from '@/components/UI/FullScreenToggle';
 
 interface GalleryViewerProps {
   images: GalleryImage[];
@@ -119,13 +120,16 @@ const GalleryViewer: React.FC<GalleryViewerProps> = ({ images, initialIndex, isO
             </div>
 
             {/* Right Controls */}
-            <div className="flex gap-4 pointer-events-auto">
-                 <button 
-                    onClick={onClose}
-                    className="w-10 h-10 rounded-full bg-black/50 hover:bg-black text-white flex items-center justify-center transition-colors backdrop-blur-md border border-white/10"
-                 >
-                     <Minimize2 size={20} />
-                 </button>
+            <div className="flex items-center gap-3 pointer-events-auto">
+              <button 
+                type="button"
+                onClick={onClose}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-black/50 hover:bg-black/80 text-white text-xs uppercase tracking-[0.16em] font-semibold transition-all backdrop-blur-md border border-white/15 shadow-lg cursor-pointer hover:scale-105"
+              >
+                <ArrowLeft size={16} />
+                <span>Volver</span>
+              </button>
+              <FullScreenToggle />
             </div>
         </div>
 

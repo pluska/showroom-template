@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation';
 import { getFloorsData } from '@/app/actions/units';
+import { getEntryFloorId } from '@/data/floors';
 
 export default async function PlantasRedirect() {
   const floorsData = await getFloorsData();
-  const defaultFloor = floorsData.find(f => f.id === '9') ? '9' : (floorsData[0]?.id || '1');
+  const defaultFloor = floorsData[floorsData.length - 1]?.id || getEntryFloorId();
   redirect(`/plantas/${defaultFloor}`);
 }

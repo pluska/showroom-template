@@ -45,7 +45,7 @@ function mapDbRowToBuildingFace(row: any): BuildingFace {
     return getAssetUrl(path);
   };
 
-  const face: BuildingFace = {
+  return {
     id: row.id,
     name: row.name,
     dayToNightTransition: resolve(row.dayToNightTransition),
@@ -71,66 +71,76 @@ function mapDbRowToBuildingFace(row: any): BuildingFace {
       }
     }
   };
-
-  // Clean up boundaries so we don't display invalid rotation buttons
-  if (row.order === 1) { // Cara Derecha: No right transition
-    face.day.transitions.toRight = "";
-    face.night.transitions.toRight = "";
-  } else if (row.order === 2) { // Cara Izquierda: No left transition
-    face.day.transitions.toLeft = "";
-    face.night.transitions.toLeft = "";
-  }
-
-  return face;
 }
 
 const defaultFacesSeed = [
   {
     id: 1,
-    name: "Cara Central",
-    dayBackground: "building/photos/face_0_daylight.webp",
-    dayBackgroundVideo: "building/videos/face_0_daylight.mp4",
-    dayIntroVideo: "videos/walks/walk_center_daylight.mp4",
-    dayToLeftTransition: "building/transitions/trans_0_to_2_daylight.mp4",
-    dayToRightTransition: "building/transitions/trans_0_to_1_daylight.mp4",
-    nightBackground: "building/photos/face_0_nightlight.webp",
-    nightBackgroundVideo: "building/videos/face_0_nightlight.mp4",
-    nightIntroVideo: "videos/walks/walk_center_nightlight.mp4",
-    nightToLeftTransition: "building/transitions/trans_0_to_2_nightlight.mp4",
-    nightToRightTransition: "building/transitions/trans_0_to_1_nightlight.mp4",
-    dayToNightTransition: "building/transitions/trans_0_day_to_night.mp4",
-    nightToDayTransition: "building/transitions/trans_0_night_to_day.mp4",
+    name: "Cara Inicial",
+    dayBackground: "building/photos/0.1.webp",
+    dayBackgroundVideo: "building/videos/0.1.mp4",
+    dayIntroVideo: "building/transitions/0.1_a_1.1.mp4",
+    dayToLeftTransition: null,
+    dayToRightTransition: null,
+    nightBackground: "building/photos/0.1.webp",
+    nightBackgroundVideo: "building/videos/0.1.mp4",
+    nightIntroVideo: "building/transitions/0.1_a_1.1.mp4",
+    nightToLeftTransition: null,
+    nightToRightTransition: null,
+    dayToNightTransition: null,
+    nightToDayTransition: null,
     order: 0,
   },
   {
     id: 2,
-    name: "Cara Derecha",
-    dayBackground: "building/photos/face_1_daylight.webp",
-    dayIntroVideo: "videos/walks/walk_right_daylight.mp4",
-    dayToLeftTransition: "building/transitions/trans_1_to_0_daylight.mp4",
-    dayToRightTransition: null,
-    nightBackground: "building/photos/face_1_nightlight.webp",
-    nightIntroVideo: "videos/walks/walk_right_nightlight.mp4",
-    nightToLeftTransition: "building/transitions/trans_1_to_0_nightlight.mp4",
-    nightToRightTransition: null,
-    dayToNightTransition: "building/transitions/trans_1_day_to_night.mp4",
-    nightToDayTransition: "building/transitions/trans_1_night_to_day.mp4",
+    name: "Cara Izquierda",
+    dayBackground: "building/photos/2.1.webp",
+    dayBackgroundVideo: null,
+    dayIntroVideo: "building/transitions/2.1_a_PISO_6.mp4",
+    dayToLeftTransition: null,
+    dayToRightTransition: "building/transitions/2.1_a_1.1.mp4",
+    nightBackground: "building/photos/2.2.2.webp",
+    nightBackgroundVideo: null,
+    nightIntroVideo: "building/transitions/2.2_a_PISO_6.mp4",
+    nightToLeftTransition: null,
+    nightToRightTransition: "building/transitions/2.2_a_1.2.mp4",
+    dayToNightTransition: "building/transitions/2.1_a_2.2.mp4",
+    nightToDayTransition: "building/transitions/2.2_a_2.1.mp4",
     order: 1,
   },
   {
     id: 3,
-    name: "Cara Izquierda",
-    dayBackground: "building/photos/face_2_daylight.webp",
-    dayIntroVideo: "videos/walks/walk_left_daylight.mp4",
-    dayToLeftTransition: null,
-    dayToRightTransition: "building/transitions/trans_2_to_0_daylight.mp4",
-    nightBackground: "building/photos/face_2_nightlight.webp",
-    nightIntroVideo: "videos/walks/walk_left_nightlight.mp4",
-    nightToLeftTransition: null,
-    nightToRightTransition: "building/transitions/trans_2_to_0_nightlight.mp4",
-    dayToNightTransition: "building/transitions/trans_2_day_to_night.mp4",
-    nightToDayTransition: "building/transitions/trans_2_night_to_day.mp4",
+    name: "Cara Central",
+    dayBackground: "building/photos/1.1.webp",
+    dayBackgroundVideo: null,
+    dayIntroVideo: "building/transitions/1.1_a_PISO_6.mp4",
+    dayToLeftTransition: "building/transitions/1.1_a_2.1.mp4",
+    dayToRightTransition: "building/transitions/1.1_a_3.1.mp4",
+    nightBackground: "building/photos/1.2.webp",
+    nightBackgroundVideo: null,
+    nightIntroVideo: "building/transitions/1.2_a_PISO_6.mp4",
+    nightToLeftTransition: "building/transitions/1.2_A_2.2.mp4",
+    nightToRightTransition: "building/transitions/1.2_a_3.2.mp4",
+    dayToNightTransition: "building/transitions/1.1_a_1.2.mp4",
+    nightToDayTransition: "building/transitions/1.2_a_1.1.mp4",
     order: 2,
+  },
+  {
+    id: 4,
+    name: "Cara Derecha",
+    dayBackground: "building/photos/3.1.webp",
+    dayBackgroundVideo: null,
+    dayIntroVideo: "building/transitions/3.1_a_PISO_6.mp4",
+    dayToLeftTransition: "building/transitions/3.1_a_1.1.mp4",
+    dayToRightTransition: null,
+    nightBackground: "building/photos/3.2.webp",
+    nightBackgroundVideo: null,
+    nightIntroVideo: "building/transitions/3.2_a_PISO_6.mp4",
+    nightToLeftTransition: "building/transitions/3.2_a_1.2.mp4",
+    nightToRightTransition: null,
+    dayToNightTransition: "building/transitions/3.1_a_3.2.mp4",
+    nightToDayTransition: "building/transitions/3.2_a_3.1.mp4",
+    order: 3,
   }
 ];
 

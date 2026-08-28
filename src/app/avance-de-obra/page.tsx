@@ -1,7 +1,6 @@
 import { getProgressUpdates } from "@/app/actions/progress";
 import ConstructionProgressClient, { ProgressUpdateClient } from "@/components/progress/ConstructionProgressClient";
 
-export const runtime = "edge";
 
 export const metadata = {
   title: "Avance de Obra",

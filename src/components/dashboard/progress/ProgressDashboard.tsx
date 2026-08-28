@@ -2,18 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { 
-  Plus, 
-  LayoutGrid, 
-  List, 
-  Trash2, 
-  Edit, 
-  Hammer, 
-  Calendar, 
-  Video, 
-  Image as ImageIcon, 
-  X, 
-  AlertTriangle, 
-  ExternalLink 
+  Plus,
+  LayoutGrid,
+  List,
+  Trash2,
+  Edit,
+  Hammer,
+  Calendar,
+  Video,
+  Image as ImageIcon,
+  X,
+  Check,
+  AlertTriangle,
+  ExternalLink
 } from "lucide-react";
 import { 
   createProgressUpdate, 
@@ -75,6 +76,51 @@ const formatSpanishDate = (dateVal: Date): string => {
   return `${MONTHS[d.getMonth()].label} ${d.getFullYear()}`;
 };
 
+const uploadFileWithProgress = (file: File, category: string, onProgress: (progress: number) => void): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("category", category);
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) {
+        const percentComplete = Math.round((event.loaded / event.total) * 100);
+        onProgress(percentComplete);
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res.success && res.url) {
+            resolve(res.url);
+          } else {
+            reject(new Error(res.error || "Error al subir archivo"));
+          }
+        } catch (e) {
+          reject(new Error("Error al procesar la respuesta del servidor"));
+        }
+      } else {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          reject(new Error(res.error || `Error en la subida (${xhr.status})`));
+        } catch (e) {
+          reject(new Error(`La subida falló con estado ${xhr.status}`));
+        }
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      reject(new Error("Ocurrió un error de red durante la subida."));
+    });
+
+    xhr.open("POST", "/api/r2/upload");
+    xhr.send(formData);
+  });
+};
+
 export default function ProgressDashboard({ initialUpdates, currentUser }: ProgressDashboardProps) {
   const [updates, setUpdates] = useState<ProgressUpdate[]>(initialUpdates);
   const [activeView, setActiveView] = useState<"grid" | "list">("grid");
@@ -96,6 +142,13 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [formError, setFormError] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   const isEditor = currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
 
@@ -141,11 +194,16 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
       try {
         let finalMediaUrl = mediaUrl;
 
-        // Si hay un archivo nuevo, lo subimos
+        // Si hay un archivo nuevo, lo subimos con barra de progreso
         if (mediaFile) {
-          const formData = new FormData();
-          formData.append("file", mediaFile);
-          finalMediaUrl = await uploadMedia(formData);
+          setUploadProgress(0);
+          try {
+            finalMediaUrl = await uploadFileWithProgress(mediaFile, "progress", (progress) => {
+              setUploadProgress(progress);
+            });
+          } finally {
+            setUploadProgress(null);
+          }
         }
 
         const payload = {
@@ -195,15 +253,25 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
         setIsDeleteConfirmOpen(false);
         setUpdateToDelete(null);
       } catch (err: any) {
-        alert("Error al eliminar: " + err.message);
+        showNotification("error", "Error al eliminar: " + err.message);
       }
     });
   };
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto animate-fade-in pb-12">
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <Check className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Upper header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 border-base-300 dark:border-base-200">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-5 border-base-300">
         <div>
           <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
             <Hammer className="w-6 h-6 text-brand-orange animate-pulse" />
@@ -216,7 +284,7 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
 
         <div className="flex items-center gap-2 self-stretch sm:self-auto">
           {/* List/Grid View Toggle */}
-          <div className="join bg-base-100 border border-base-300 dark:border-base-200 p-0.5 rounded-lg">
+          <div className="join bg-base-100 border border-base-300 p-0.5 rounded-lg">
             <button 
               onClick={() => setActiveView("grid")}
               className={`btn btn-ghost btn-sm join-item px-3 ${activeView === "grid" ? "bg-base-200 text-brand-orange" : "text-gray-400"}`}
@@ -242,11 +310,11 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
       </div>
 
       {updates.length === 0 ? (
-        <div className="bg-base-100 rounded-xl border border-base-200 dark:border-base-300 p-16 flex flex-col items-center justify-center text-center shadow-sm">
+        <div className="bg-base-100 rounded-xl border border-base-200 p-16 flex flex-col items-center justify-center text-center shadow-sm">
           <div className="p-4 rounded-full bg-base-200 text-brand-orange/60 mb-4">
             <Hammer className="w-12 h-12" />
           </div>
-          <h3 className="text-lg font-bold font-primary text-gray-800 dark:text-gray-200">No hay avances registrados</h3>
+          <h3 className="text-lg font-bold font-primary text-gray-800">No hay avances registrados</h3>
           <p className="text-gray-500 text-sm max-w-sm mt-2">
             Comienza agregando un reporte de avance de obra con fotos o videos para que tus compradores puedan seguir la construcción.
           </p>
@@ -266,7 +334,7 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
             return (
               <div 
                 key={update.id} 
-                className="card bg-base-100 shadow-sm border border-base-200 dark:border-base-300 hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full group"
+                className="card bg-base-100 shadow-sm border border-base-200 hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full group"
               >
                 {/* Media Container */}
                 <div className="relative aspect-video w-full bg-neutral-900 overflow-hidden">
@@ -299,19 +367,19 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
 
                 {/* Content */}
                 <div className="card-body p-5 flex flex-col flex-1">
-                  <h3 className="card-title font-bold text-base text-gray-900 dark:text-white line-clamp-1">
+                  <h3 className="card-title font-bold text-base text-gray-900 line-clamp-1">
                     {update.title}
                   </h3>
-                  <p className="text-gray-500 dark:text-gray-400 text-xs font-secondary mt-1 flex-1 line-clamp-3">
+                  <p className="text-gray-500 text-xs font-secondary mt-1 flex-1 line-clamp-3">
                     {update.description || "Sin descripción proporcionada."}
                   </p>
                   
                   {/* Action buttons */}
                   {isEditor && (
-                    <div className="flex gap-2 mt-4 pt-3 border-t border-base-200 dark:border-base-300">
+                    <div className="flex gap-2 mt-4 pt-3 border-t border-base-200">
                       <button 
                         onClick={() => openEditModal(update)}
-                        className="btn btn-outline btn-sm border-base-300 dark:border-base-200 text-gray-700 dark:text-gray-200 hover:bg-base-200 hover:text-gray-900 flex-1"
+                        className="btn btn-outline btn-sm border-base-300 text-gray-700 hover:bg-base-200 hover:text-gray-900 flex-1"
                       >
                         <Edit className="w-3.5 h-3.5 mr-1" /> Editar
                       </button>
@@ -330,11 +398,11 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
         </div>
       ) : (
         /* LIST VIEW */
-        <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 dark:border-base-300 overflow-hidden">
+        <div className="bg-base-100 rounded-xl shadow-sm border border-base-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="table table-zebra w-full text-left">
               <thead>
-                <tr className="bg-base-200/50 dark:bg-base-300/50">
+                <tr className="bg-base-200/50">
                   <th className="w-24">Multimedia</th>
                   <th>Título</th>
                   <th>Fecha</th>
@@ -351,7 +419,7 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
                   return (
                     <tr key={update.id} className="hover:bg-base-200/30 transition-colors">
                       <td>
-                        <div className="relative w-16 aspect-video rounded-md overflow-hidden bg-neutral-900 border border-base-300 dark:border-base-200 shadow-sm">
+                        <div className="relative w-16 aspect-video rounded-md overflow-hidden bg-neutral-900 border border-base-300 shadow-sm">
                           {mediaType === "video" ? (
                             <div className="w-full h-full flex items-center justify-center text-white bg-black/70">
                               <Video className="w-5 h-5 opacity-60" />
@@ -361,7 +429,7 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
                           )}
                         </div>
                       </td>
-                      <td className="font-bold text-gray-900 dark:text-white text-sm">
+                      <td className="font-bold text-gray-900 text-sm">
                         {update.title}
                       </td>
                       <td>
@@ -380,14 +448,14 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
                           <div className="flex gap-1 justify-end">
                             <button
                               onClick={() => openEditModal(update)}
-                              className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 hover:text-brand-orange"
+                              className="btn btn-ghost btn-xs text-gray-500 hover:text-brand-orange"
                               title="Editar"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => confirmDelete(update)}
-                              className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 hover:text-error"
+                              className="btn btn-ghost btn-xs text-gray-500 hover:text-error"
                               title="Eliminar"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -407,14 +475,15 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
       {/* FORM MODAL (ADD / EDIT) */}
       {isFormOpen && (
         <div className="modal modal-open z-50">
-          <div className="modal-box bg-white dark:bg-base-100 max-w-lg border border-base-200 overflow-x-hidden">
+          <div className="modal-box bg-white max-w-lg border border-base-200 overflow-x-hidden">
             <button
               onClick={() => setIsFormOpen(false)}
+              disabled={uploadProgress !== null}
               className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
             >
               <X className="w-4 h-4" />
             </button>
-            <h3 className="font-bold text-lg font-primary text-gray-900 dark:text-white border-b pb-3 mb-4">
+            <h3 className="font-bold text-lg font-primary text-gray-900 border-b pb-3 mb-4">
               {editingUpdate ? "Editar Avance de Obra" : "Nuevo Avance de Obra"}
             </h3>
 
@@ -478,6 +547,7 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
                 <input
                   type="file"
                   accept="video/*,image/*"
+                  disabled={uploadProgress !== null}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) setMediaFile(file);
@@ -493,6 +563,20 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
                     El archivo se guardará de forma segura en la nube (R2).
                   </span>
                 </label>
+
+                {uploadProgress !== null && (
+                  <div className="mt-2 space-y-1.5 p-3 bg-base-200/50 rounded-lg border border-base-200">
+                    <div className="flex justify-between text-xs font-bold font-secondary">
+                      <span className="text-gray-600">Subiendo archivo...</span>
+                      <span className="text-brand-orange">{uploadProgress}%</span>
+                    </div>
+                    <progress 
+                      className="progress progress-warning w-full bg-base-300" 
+                      value={uploadProgress} 
+                      max="100"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="form-control">
@@ -519,34 +603,35 @@ export default function ProgressDashboard({ initialUpdates, currentUser }: Progr
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
+                  disabled={uploadProgress !== null}
                   className="btn btn-ghost text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={isPending}
+                  disabled={isPending || uploadProgress !== null}
                   className="btn btn-warning bg-brand-orange text-white text-sm"
                 >
-                  {isPending && <span className="loading loading-spinner loading-xs mr-1" />}
+                  {(isPending || uploadProgress !== null) && <span className="loading loading-spinner loading-xs mr-1" />}
                   {editingUpdate ? "Guardar Cambios" : "Crear Avance"}
                 </button>
               </div>
             </form>
           </div>
-          <div className="modal-backdrop bg-black/40 backdrop-blur-xs" onClick={() => setIsFormOpen(false)}></div>
+          <div className="modal-backdrop bg-black/40 backdrop-blur-xs" onClick={() => uploadProgress === null && setIsFormOpen(false)}></div>
         </div>
       )}
 
       {/* DELETE CONFIRMATION MODAL */}
       {isDeleteConfirmOpen && updateToDelete && (
         <div className="modal modal-open z-50">
-          <div className="modal-box bg-white dark:bg-base-100 border border-base-200 overflow-x-hidden">
+          <div className="modal-box bg-white border border-base-200 overflow-x-hidden">
             <h3 className="font-bold text-lg text-error flex items-center gap-2 border-b pb-2 mb-4">
               <AlertTriangle className="w-5 h-5 text-error" />
               ¿Confirmar eliminación de avance?
             </h3>
-            <p className="text-gray-600 dark:text-gray-300 text-sm py-2">
+            <p className="text-gray-600 text-sm py-2">
               ¿Estás seguro de que deseas eliminar el avance <strong>{updateToDelete.title}</strong> del sistema? 
               Se realizará un borrado lógico (soft delete) en la base de datos.
             </p>

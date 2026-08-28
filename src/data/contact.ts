@@ -34,9 +34,9 @@ export interface ContactConfig {
 export const contactConfig: ContactConfig = {
   title: "Agenda una visita",
   description: "Estamos listos para ayudarte a encontrar tu próximo hogar. Déjanos tus datos y nos pondremos en contacto contigo a la brevedad.",
-  address: "Dirección del Proyecto\nPueblo Libre, Lima",
-  phone: "+51 999 999 999",
-  email: "ventas@proyecto.com",
+  address: "RELLENAR Dirección\nRELLENAR Distrito, Ciudad",
+  phone: "RELLENAR",
+  email: "RELLENAR@dominio.com",
   officeHours: "Lunes a Domingo de 10:00 am a 6:00 pm",
   mapUrl: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3901.442!2d-77.067632!3d-12.07592!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTLCsDA0JzMzLjMiUyA3N8KwMDQnMDMuNSJX!5e0!3m2!1sen!2spe!4v1234567890",
   mapCoordinates: {

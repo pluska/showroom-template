@@ -1,17 +1,103 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import MapComponent from '@/components/map/Map';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import Sidebar from '@/components/layout/Sidebar';
-import { Search, MapPin, Menu, ChevronDown, ChevronUp, Car, Footprints, Bike, Navigation, X } from 'lucide-react';
+import { Search, MapPin, Menu, ChevronDown, ChevronUp, Car, Footprints, Bike, Navigation, X, Play, Map as MapIcon } from 'lucide-react';
 import { type LocationFeature } from '@/data/locations';
+import { landmarks, landmarkPoiNames } from '@/data/landmarks';
 import { getLocations, seedLocations } from '@/app/actions/locations';
+import { useStore } from '@/store/useStore';
+import { getAssetUrl } from '@/utils/assets';
+import config from '@/config/config';
+
+// Mapbox se carga en cliente y sin SSR a propósito. No es una optimización
+// cosmética: la librería pesa ~2,5 MB y, importada de forma estática, entra
+// entera en el bundle de servidor y hace que el Worker de Cloudflare supere
+// su límite de tamaño y el deploy falle. Además necesita `window`, así que en
+// el servidor no aporta nada. Mismo patrón que el editor de Konva en
+// src/components/dashboard/content/AIGenerator.tsx.
+const MapComponent = dynamic(() => import('@/components/map/Map'), {
+  ssr: false,
+  loading: () => <div className="w-full h-full bg-gray-200 animate-pulse" />,
+});
+
+// El proyecto: origen desde el que se mide cada hito.
+const PROJECT_COORDS: [number, number] = config.company.buildingCoordinates;
+
+// Video de entrada a Ubicación (archivo entregado: `VIDEO PREMAPA VF.mp4`).
+// Baja desde el planeta hasta Tumbes y termina sobre el proyecto, con la
+// Panamericana y la vía de acceso resaltadas.
+//
+// Estuvo apagado mientras el archivo no existía; el bloque entero siguió en el
+// componente colgando de este flag —mismo patrón que `bookingEnabled` en
+// /contact— así que reactivarlo fue subirlo a R2 y poner esto en `true`.
+const INTRO_VIDEO_ENABLED = true;
 
 const DirectionsPage = () => {
+    const isForcedLandscape = useStore(state => state.isForcedLandscape);
+    const setForcedLandscape = useStore(state => state.setForcedLandscape);
     const [locations, setLocations] = useState<any[]>([]);
     const [filter, setFilter] = useState('');
     const [selectedName, setSelectedName] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    // Video Transition State & References
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const [viewMode, setViewMode] = useState<'video' | 'map'>(
+        INTRO_VIDEO_ENABLED ? 'video' : 'map',
+    );
+    // The "Explorar mapa" button appears once the intro video reaches the mark
+    // below, so it is offered well before the clip finishes its first pass.
+    // A los 15 s el vuelo ya aterrizó sobre el proyecto y se leen la
+    // Panamericana y la vía de acceso: de ahí en adelante lo que queda es
+    // remate, y al que ya vio lo que necesitaba no hay que retenerlo.
+    const [showExploreButton, setShowExploreButton] = useState(false);
+    const EXPLORE_BUTTON_AT_SECONDS = 15;
+
+    // Control de orientación: forzar horizontal para el video introductorio en móviles en retrato, y volver a vertical al cambiar a mapa
+    useEffect(() => {
+        const checkAndApplyLandscape = () => {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth <= 1024 && 'ontouchstart' in window);
+            const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+
+            if (viewMode === 'video' && isMobile && isPortrait) {
+                setForcedLandscape(true);
+            } else {
+                setForcedLandscape(false);
+            }
+        };
+
+        checkAndApplyLandscape();
+
+        window.addEventListener('resize', checkAndApplyLandscape);
+        window.addEventListener('orientationchange', checkAndApplyLandscape);
+
+        return () => {
+            window.removeEventListener('resize', checkAndApplyLandscape);
+            window.removeEventListener('orientationchange', checkAndApplyLandscape);
+            setForcedLandscape(false);
+        };
+    }, [viewMode, setForcedLandscape]);
+
+    const videoUrl = getAssetUrl('location/videos/video_mapa.mp4');
+    const posterUrl = getAssetUrl('location/photos/FOTO_VISTA_PLANETA_PERU.webp');
+
+    // Al terminar, el video se queda quieto en su último fotograma en vez de
+    // rebobinar. Ese fotograma ES la vista del proyecto con la que arranca el
+    // mapa, así que congelarlo encadena las dos pantallas; rehacer el descenso
+    // desde el planeta, en cambio, se leía como que algo había fallado.
+    const handleVideoEnded = () => {
+        setShowExploreButton(true);
+    };
+
+    const handleTimeUpdate = () => {
+        const video = videoRef.current;
+        if (!video) return;
+        if (video.currentTime >= EXPLORE_BUTTON_AT_SECONDS) {
+            setShowExploreButton(true);
+        }
+    };
 
     // Load locations dynamically from database
     useEffect(() => {
@@ -55,15 +141,99 @@ const DirectionsPage = () => {
     const [transportMode, setTransportMode] = useState<'driving' | 'walking' | 'cycling'>('driving');
     const [routeStats, setRouteStats] = useState<{ driving: { duration: number }; walking: { duration: number }; cycling: { duration: number } } | null>(null);
 
+    // Hitos: travel time from the project to each one, and the clip being watched
+    const [landmarkDurations, setLandmarkDurations] = useState<Record<string, number>>({});
+    const [openLandmarkSlug, setOpenLandmarkSlug] = useState<string | null>(null);
+    const openLandmark = landmarks.find(l => l.slug === openLandmarkSlug) || null;
+
+    // Deliberately the Directions endpoint, not the cheaper Matrix one: the
+    // route drawn when a hito is picked comes from Directions, and the two
+    // disagree by minutes on some of these, which would show the same trip
+    // with two different times on screen at once.
+    useEffect(() => {
+        const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+        if (!MAPBOX_TOKEN) return;
+        let cancelled = false;
+
+        const origin = `${PROJECT_COORDS[0]},${PROJECT_COORDS[1]}`;
+        Promise.all(landmarks.map(landmark =>
+            fetch(`https://api.mapbox.com/directions/v5/mapbox/${transportMode}/${origin};${landmark.coordinates[0]},${landmark.coordinates[1]}?access_token=${MAPBOX_TOKEN}`)
+                .then(res => res.json() as Promise<any>)
+                .then(data => data?.routes?.[0]?.duration as number | undefined)
+                .catch(() => undefined)
+        )).then(durations => {
+            if (cancelled) return;
+            const next: Record<string, number> = {};
+            landmarks.forEach((landmark, i) => {
+                const seconds = durations[i];
+                if (typeof seconds === 'number') next[landmark.slug] = seconds;
+            });
+            setLandmarkDurations(next);
+        });
+
+        return () => { cancelled = true; };
+    }, [transportMode]);
+
     const categories = Array.from(new Set(locationsFeatures.map((f: LocationFeature) => f.properties.categoria))).filter(Boolean) as string[];
 
-    const filteredLocations = locationsFeatures.filter((feature: LocationFeature) => {
-        if (feature.properties.nombre === 'Santa Fe') return false;
-
-        const matchesSearch = feature.properties.nombre.toLowerCase().includes(filter.toLowerCase());
-        const matchesCategory = selectedCategory ? feature.properties.categoria === selectedCategory : true;
+    const matchesFilters = (nombre: string, categoria?: string) => {
+        const matchesSearch = nombre.toLowerCase().includes(filter.toLowerCase());
+        const matchesCategory = selectedCategory ? categoria === selectedCategory : true;
         return matchesSearch && matchesCategory;
+    };
+
+    // Lo que se PINCHA en el mapa. Los hitos quedan fuera a propósito: llevan su
+    // propio marcador levantado, así que como POI corriente saldrían pinchados
+    // dos veces en el mismo sitio.
+    const filteredLocations = locationsFeatures.filter((feature: LocationFeature) => {
+        if (landmarkPoiNames.has(feature.properties.nombre)) return false;
+        return matchesFilters(feature.properties.nombre, feature.properties.categoria);
     });
+
+    /**
+     * Una fila del listado, venga de un hito o de un POI. Los dos orígenes se
+     * unifican aquí para que el listado sea una sola lista ordenada y no dos
+     * bloques cosidos en el render.
+     */
+    interface PanelPlace {
+        key: string;
+        nombre: string;
+        categoria?: string;
+        coordinates: [number, number];
+        /** Póster del hito, o ícono del POI. */
+        thumbnail?: string | null;
+        /** Sólo los hitos lo traen: es lo que hace que la fila tenga clip. */
+        landmarkSlug?: string;
+    }
+
+    // LO QUE SE LISTA. Los hitos van DELANTE: son los únicos lugares con toma
+    // propia, así que son por dónde se quiere que el visitante empiece, no una
+    // fila más entre veintitantas. Se filtran con el mismo criterio que los POI,
+    // así que buscar o cambiar de categoría los afecta igual; lo único fijo es
+    // que, cuando pasan el filtro, van arriba.
+    const panelPlaces: PanelPlace[] = [
+        ...landmarks
+            .filter((l) => matchesFilters(l.name, l.category))
+            .map((l) => ({
+                key: `hito-${l.slug}`,
+                nombre: l.name,
+                categoria: l.category,
+                coordinates: l.coordinates,
+                thumbnail: getAssetUrl(l.poster),
+                landmarkSlug: l.slug,
+            })),
+        ...filteredLocations.map((feature: LocationFeature) => ({
+            key: (feature.id as string) || feature.properties.nombre,
+            nombre: feature.properties.nombre,
+            categoria: feature.properties.categoria,
+            coordinates: feature.geometry.coordinates,
+            thumbnail: feature.properties.imagen
+                ? feature.properties.imagen.startsWith('http') || feature.properties.imagen.startsWith('/')
+                    ? feature.properties.imagen
+                    : `/${feature.properties.imagen}`
+                : null,
+        })),
+    ];
 
     useEffect(() => {
         const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
@@ -72,7 +242,7 @@ const DirectionsPage = () => {
                 try {
                     if (!MAPBOX_TOKEN) return;
                     const response = await fetch(
-                        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(filter)}.json?access_token=${MAPBOX_TOKEN}&country=pe&limit=5&proximity=-77.067632,-12.07592`
+                        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(filter)}.json?access_token=${MAPBOX_TOKEN}&country=pe&limit=5&language=es&proximity=${PROJECT_COORDS[0]},${PROJECT_COORDS[1]}`
                     );
                     const data = (await response.json()) as any;
                     setSearchResults(data.features || []);
@@ -107,6 +277,14 @@ const DirectionsPage = () => {
         });
     }, []);
 
+    // Three states: open, peeking (its handle stays clickable so it can be
+    // reopened), and fully out of the way while a hito's clip is playing.
+    const panelStateClasses = openLandmark || viewMode !== 'map'
+        ? 'translate-y-full pointer-events-none'
+        : isPanelOpen
+            ? 'translate-y-0 pointer-events-auto'
+            : 'translate-y-full md:translate-y-[calc(100%-180px)] pointer-events-auto';
+
     const formatDuration = (seconds: number) => {
         if (!seconds) return '';
         const mins = Math.round(seconds / 60);
@@ -114,7 +292,12 @@ const DirectionsPage = () => {
     };
 
     return (
-        <div className="w-full h-full relative overflow-hidden bg-gray-200">
+        <div
+            className="w-full relative overflow-hidden bg-gray-200"
+            style={{
+                height: isForcedLandscape ? '100vw' : '100svh',
+            }}
+        >
             <div className="absolute inset-0 z-0">
                 <MapComponent
                     destination={destination}
@@ -126,6 +309,10 @@ const DirectionsPage = () => {
                     transportMode={transportMode}
                     onRouteCalculated={handleRouteCalculated}
                     locations={filteredLocations}
+                    landmarks={landmarks}
+                    landmarkDurations={landmarkDurations}
+                    openLandmarkSlug={openLandmarkSlug}
+                    onLandmarkOpen={setOpenLandmarkSlug}
                     padding={useMemo(() => {
                         // Only push map on desktop where panel is sidebar
                         const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
@@ -140,8 +327,9 @@ const DirectionsPage = () => {
             </div>
 
             {/* Top Left Controls Container */}
+            {/* Burger Menu Button (Highest priority z-index so it's always above the mobile panel) */}
             <div
-                className="fixed top-6 left-6 z-30 flex items-center gap-4 pointer-events-none"
+                className="fixed top-6 left-6 z-50 pointer-events-none"
                 style={{ top: 'calc(1.5rem + env(safe-area-inset-top))', left: 'calc(1.5rem + env(safe-area-inset-left))' }}
             >
                 <button
@@ -150,8 +338,13 @@ const DirectionsPage = () => {
                 >
                     <Menu size={24} />
                 </button>
+            </div>
 
-                {/* Page Title - Outside Panel */}
+            {/* Page Title - Lower z-index so the panel slides over it on mobile */}
+            <div
+                className="fixed top-6 left-20 z-30 pointer-events-none"
+                style={{ top: 'calc(1.5rem + env(safe-area-inset-top))', left: 'calc(5rem + env(safe-area-inset-left))' }}
+            >
                 <h1 className="text-2xl font-secondary font-bold text-gray-900 bg-white/90 backdrop-blur-sm px-6 py-2 rounded-full shadow-md pointer-events-auto">
                     Direcciones
                 </h1>
@@ -162,38 +355,29 @@ const DirectionsPage = () => {
                 className="fixed top-6 right-16 z-30 flex flex-col gap-4 items-end pointer-events-none"
                 style={{ top: 'calc(1.5rem + env(safe-area-inset-top))', right: 'calc(4rem + env(safe-area-inset-right))' }}
             >
-                <div className="flex flex-col gap-2">
-                    <button
-                        onClick={() => setTransportMode('driving')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg transition-all pointer-events-auto ${transportMode === 'driving' ? 'bg-brand-orange text-white scale-105' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                        title="Auto"
-                    >
-                        <Car size={20} />
-                        {routeStats && <span className="text-xs font-bold">{formatDuration(routeStats.driving.duration)}</span>}
-                    </button>
-                    <button
-                        onClick={() => setTransportMode('walking')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg transition-all pointer-events-auto ${transportMode === 'walking' ? 'bg-brand-orange text-white scale-105' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                        title="Caminar"
-                    >
-                        <Footprints size={20} />
-                        {routeStats && <span className="text-xs font-bold">{formatDuration(routeStats.walking.duration)}</span>}
-                    </button>
-                    <button
-                        onClick={() => setTransportMode('cycling')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full shadow-lg transition-all pointer-events-auto ${transportMode === 'cycling' ? 'bg-brand-orange text-white scale-105' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                        title="Bicicleta"
-                    >
-                        <Bike size={20} />
-                        {routeStats && <span className="text-xs font-bold">{formatDuration(routeStats.cycling.duration)}</span>}
-                    </button>
+                <div className="flex flex-col gap-2 items-end">
+                    {([
+                        { mode: 'driving' as const, Icon: Car, label: 'Auto' },
+                        { mode: 'walking' as const, Icon: Footprints, label: 'Caminar' },
+                        { mode: 'cycling' as const, Icon: Bike, label: 'Bicicleta' },
+                    ]).map(({ mode, Icon, label }) => (
+                        <button
+                            key={mode}
+                            onClick={() => setTransportMode(mode)}
+                            className={`flex items-center justify-center h-10 rounded-full shadow-lg transition-all pointer-events-auto ${routeStats ? 'gap-2 px-4' : 'w-10'} ${transportMode === mode ? 'bg-brand-orange text-white scale-105' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                            title={label}
+                        >
+                            <Icon size={20} className="shrink-0" />
+                            {routeStats && <span className="text-xs font-bold whitespace-nowrap">{formatDuration(routeStats[mode].duration)}</span>}
+                        </button>
+                    ))}
                 </div>
             </div>
 
             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
             {/* Floating Toggle Button - Mobile Only (Visible when panel closed) */}
-            {!isPanelOpen && (
+            {!isPanelOpen && !openLandmark && (
                 <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-20 md:hidden pointer-events-auto">
                     <button
                         onClick={() => setIsPanelOpen(true)}
@@ -207,7 +391,7 @@ const DirectionsPage = () => {
 
             {/* Floating Bottom Panel (Console) */}
             <div
-                className={`fixed bottom-0 md:bottom-6 left-0 md:left-6 w-full md:w-[450px] bg-white md:rounded-2xl shadow-2xl z-20 flex flex-col transition-all duration-500 ease-in-out h-full md:h-auto md:max-h-[70%] pointer-events-auto ${isPanelOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-[calc(100%-180px)]'}`}
+                className={`fixed bottom-0 md:bottom-6 left-0 md:left-6 w-full md:w-[450px] bg-white md:rounded-2xl shadow-2xl z-40 flex flex-col transition-all duration-500 ease-in-out h-full md:h-auto md:max-h-[70%] ${panelStateClasses}`}
             >
 
                 {/* Handler / Header Area */}
@@ -305,7 +489,7 @@ const DirectionsPage = () => {
                                     placeholder={searchMode === 'explore' ? "Buscar lugares cercanos..." : "Ingresa tu ubicación..."}
                                     value={filter}
                                     onChange={(e) => setFilter(e.target.value)}
-                                    className="w-full bg-gray-50 text-brand-orange border border-gray-200 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-brand-orange transition-colors"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-4 py-2 text-sm text-gray-800 focus:outline-none focus:border-brand-orange transition-colors"
                                 />
                             </div>
                         </div>
@@ -313,7 +497,7 @@ const DirectionsPage = () => {
                 </div>
 
                 {/* Content (Scrollable) */}
-                <div className={`flex-1 flex flex-col overflow-hidden bg-white md:rounded-b-2xl ${!isPanelOpen ? 'pointer-events-none' : ''}`}>
+                <div className="flex-1 flex flex-col overflow-hidden bg-white md:rounded-b-2xl">
                     {searchMode === 'explore' && (
                         <div className="p-4 pb-2 space-y-3 shrink-0 bg-white border-b border-gray-100">
                             {/* Categories - Horizontal Scroll */}
@@ -340,29 +524,53 @@ const DirectionsPage = () => {
 
                     <div className="flex-1 overflow-y-auto p-4 pt-4 space-y-2">
                         {searchMode === 'explore' ? (
-                            filteredLocations.length > 0 ? (
-                                filteredLocations.map((feature: any) => (
+                            panelPlaces.length > 0 ? (
+                                panelPlaces.map((place) => (
                                     <div
-                                        key={feature.id || feature.properties.nombre}
-                                        onClick={() => handleLocationSelect(feature.geometry.coordinates, feature.properties.nombre)}
-                                        className="p-3 rounded-lg border border-gray-100 hover:border-brand-orange/30 hover:bg-orange-50/30 transition-all cursor-pointer group flex items-start gap-3"
+                                        key={place.key}
+                                        onClick={() => handleLocationSelect(place.coordinates, place.nombre)}
+                                        className="p-3 rounded-lg border border-gray-100 hover:border-brand-orange/30 hover:bg-orange-50/30 transition-all cursor-pointer group flex items-center gap-3"
                                     >
-                                        <div className="w-10 h-10 rounded-full bg-white p-1.5 shadow-sm border border-gray-100 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                                            {feature.properties.imagen ? (
+                                        {/* El póster del hito se recorta a sangre; el ícono de
+                                            un POI es un pictograma y necesita su aire. */}
+                                        <div
+                                            className={`w-10 h-10 rounded-full shadow-sm border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden group-hover:scale-110 transition-transform ${
+                                                place.landmarkSlug ? 'bg-black' : 'bg-white p-1.5'
+                                            }`}
+                                        >
+                                            {place.thumbnail ? (
                                                 <img
-                                                    src={feature.properties.imagen.startsWith('http') || feature.properties.imagen.startsWith('/') ? feature.properties.imagen : `/${feature.properties.imagen}`}
-                                                    alt={feature.properties.nombre}
-                                                    className="w-full h-full object-contain"
+                                                    src={place.thumbnail}
+                                                    alt={place.nombre}
+                                                    className={`w-full h-full ${place.landmarkSlug ? 'object-cover' : 'object-contain'}`}
                                                     onError={(e) => e.currentTarget.style.display = 'none'}
                                                 />
                                             ) : (
                                                 <MapPin size={20} className="text-gray-400 group-hover:text-brand-orange" />
                                             )}
                                         </div>
-                                        <div>
-                                            <h3 className="text-sm font-bold text-gray-800">{feature.properties.nombre}</h3>
-                                            <p className="text-xs text-brand-orange font-medium">{feature.properties.categoria}</p>
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="text-sm font-bold text-gray-800 truncate">{place.nombre}</h3>
+                                            <p className="text-xs text-brand-orange font-medium truncate">{place.categoria}</p>
                                         </div>
+
+                                        {/* Los lugares con clip llevan su botón de reproducción.
+                                            Pulsar la fila sigue haciendo lo mismo que en cualquier
+                                            otra —marcar el destino y trazar la ruta—; el clip se
+                                            reserva a este botón, igual que el "Ver más" de su
+                                            marcador en el mapa. */}
+                                        {place.landmarkSlug && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenLandmarkSlug(place.landmarkSlug!);
+                                                }}
+                                                title={`Ver video de ${place.nombre}`}
+                                                className="shrink-0 w-8 h-8 rounded-full bg-brand-orange/10 hover:bg-brand-orange text-brand-orange hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                                            >
+                                                <Play size={13} className="fill-current" />
+                                            </button>
+                                        )}
                                     </div>
                                 ))
                             ) : (
@@ -401,6 +609,106 @@ const DirectionsPage = () => {
                     </div>
                 </div>
             </div>
+
+            {/*
+              Hito player — takes over the space the directions panel leaves.
+
+              The clips are vertical (9:16). The panel is sized off the viewport
+              HEIGHT so its box keeps that same ratio: `aspect-[9/16]` with the
+              height pinned to the gap between top-4 and bottom-4 makes the
+              width follow the video instead of cropping it. That is also why
+              the margin is 4 and not 6 — for a vertical clip the height is what
+              buys width, so every pixel of margin costs a bit more than half a
+              pixel of video. `object-contain`
+              is the belt to that braces — on a viewport so tall that the panel
+              would take over the map, `max-w` caps the width and the clip
+              letterboxes against the black panel rather than losing its edges.
+            */}
+            {openLandmark && (
+                <div className="fixed inset-0 md:inset-auto md:top-4 md:bottom-4 md:left-4 z-50 bg-black/70 md:bg-transparent flex items-center justify-center p-4 md:p-0">
+                    <div className="relative w-full h-full max-w-[420px] md:w-auto md:max-w-[42vw] md:aspect-[9/16] bg-black rounded-2xl overflow-hidden shadow-2xl">
+                        <video
+                            key={openLandmark.slug}
+                            src={getAssetUrl(openLandmark.video)}
+                            poster={getAssetUrl(openLandmark.poster)}
+                            autoPlay
+                            controls
+                            playsInline
+                            // Sin pantalla completa ni imagen-en-imagen: el hito
+                            // se ve dentro de su panel, junto al mapa y a la ruta
+                            // que lo acompaña. Al salirse a pantalla completa se
+                            // perdía ese contexto, que es lo que da sentido al
+                            // clip ("a 21 min del proyecto").
+                            controlsList="nofullscreen noremoteplayback"
+                            disablePictureInPicture
+                            onDoubleClick={(e) => e.preventDefault()}
+                            className="w-full h-full object-contain"
+                        />
+
+                        {/* Title strip */}
+                        <div className="absolute inset-x-0 top-0 p-4 pb-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+                            <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">
+                                {openLandmark.category}
+                            </p>
+                            <h2 className="text-lg font-bold text-white font-secondary leading-tight pr-10">
+                                {openLandmark.name}
+                            </h2>
+                            {landmarkDurations[openLandmark.slug] && (
+                                <p className="text-xs text-white/80 mt-1">
+                                    A {formatDuration(landmarkDurations[openLandmark.slug])} del proyecto
+                                </p>
+                            )}
+                        </div>
+
+                        <button
+                            onClick={() => setOpenLandmarkSlug(null)}
+                            className="absolute top-4 right-4 p-2 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm transition-colors cursor-pointer"
+                            title="Cerrar"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* SECTION: INTRO VIDEO — se puede apagar con INTRO_VIDEO_ENABLED */}
+            {INTRO_VIDEO_ENABLED && viewMode === 'video' && (
+                <div className="fixed inset-0 z-40 bg-black flex items-center justify-center">
+                    <video
+                        ref={videoRef}
+                        src={videoUrl}
+                        poster={posterUrl}
+                        autoPlay
+                        muted
+                        playsInline
+                        onEnded={handleVideoEnded}
+                        onTimeUpdate={handleTimeUpdate}
+                        // El botón "Explorar" sólo aparece por onEnded/onTimeUpdate.
+                        // Si el video no carga (falta en R2, o falla la red) ninguno
+                        // de los dos dispara y la pantalla queda en negro sin salida:
+                        // ante un error se revela el botón para poder pasar al mapa.
+                        onError={() => setShowExploreButton(true)}
+                        className="w-full h-full object-cover"
+                    />
+
+                    {/* Floating Button to Switch to Interactive Map — revealed
+                        once the intro video passes EXPLORE_BUTTON_AT_SECONDS. */}
+                    <div
+                        className={`fixed bottom-10 left-1/2 -translate-x-1/2 z-50 transition-all duration-700 ease-out ${showExploreButton ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'}`}
+                    >
+                        <button
+                            onClick={() => {
+                                setViewMode('map');
+                                setForcedLandscape(false);
+                            }}
+                            className="flex items-center gap-2 bg-brand-primary/90 hover:bg-brand-primary backdrop-blur-xl border border-white/20 text-white px-8 py-3.5 rounded-full shadow-2xl transition-all duration-300 hover:scale-105 cursor-pointer uppercase tracking-wider text-xs lg:text-sm font-semibold font-secondary"
+                        >
+                            <MapIcon size={20} />
+                            <span>Explorar Mapa Interactivo</span>
+                        </button>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

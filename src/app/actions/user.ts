@@ -2,8 +2,9 @@
 
 import { getDb } from "@/lib/db";
 import { users, appointments } from "@/lib/db/schema";
-import bcrypt from "bcryptjs";
-import { eq, isNull, and, gte } from "drizzle-orm";
+import { hashSync } from "bcryptjs";
+
+import { eq, isNull, and, gte, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 
@@ -34,6 +35,17 @@ export async function createUser(data: any) {
 
   const db = await getDb();
 
+  // Check if email already exists
+  const existingUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, data.email.trim().toLowerCase()))
+    .limit(1);
+
+  if (existingUser.length > 0) {
+    throw new Error("El correo electrónico ya está registrado por otro usuario.");
+  }
+
   // Validate admin limits
   if (session.user.role === "ADMIN") {
     // Prevent ADMIN from creating SUPER_ADMIN or another ADMIN (unless specified, let's restrict to SELLER)
@@ -54,9 +66,10 @@ export async function createUser(data: any) {
   }
 
   const limitValue = data.role === "ADMIN" ? (data.adminLimit ?? 5) : (data.adminLimit || 0);
-  const hashedPassword = bcrypt.hashSync(data.password, 10);
+  const hashedPassword = hashSync(data.password, 10);
 
   await db.insert(users).values({
+    id: crypto.randomUUID(),
     name: data.name,
     email: data.email,
     password: hashedPassword,
@@ -70,11 +83,25 @@ export async function createUser(data: any) {
 
 export async function deleteUser(id: string, transferToId?: string) {
   const session = await auth();
-  if (!session || session.user.role !== "SUPER_ADMIN") {
-    throw new Error("Unauthorized: Only Super Admin can delete users");
+  const role = session?.user?.role;
+  if (!session || (role !== "SUPER_ADMIN" && role !== "ADMIN")) {
+    throw new Error("Unauthorized: Only Super Admin or Admin can delete users");
   }
 
   const db = await getDb();
+
+  // Un ADMIN solo puede eliminar vendedores; el SUPER_ADMIN puede eliminar a
+  // cualquiera. Se valida contra la base de datos (no contra lo que envíe el
+  // cliente) para que la restriccion no dependa de la UI.
+  if (role === "ADMIN") {
+    const [target] = await db.select().from(users).where(eq(users.id, id));
+    if (!target) {
+      throw new Error("Usuario no encontrado");
+    }
+    if (target.role !== "SELLER") {
+      throw new Error("Unauthorized: Un administrador solo puede eliminar vendedores");
+    }
+  }
 
   if (transferToId) {
     await db
@@ -105,6 +132,17 @@ export async function updateUser(id: string, data: any) {
 
   const db = await getDb();
 
+  // Check if new email is taken by another user
+  const conflictingUser = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.email, data.email.trim().toLowerCase()), ne(users.id, id)))
+    .limit(1);
+
+  if (conflictingUser.length > 0) {
+    throw new Error("El correo electrónico ya está registrado por otro usuario.");
+  }
+
   const updateData: any = {
     name: data.name,
     email: data.email,
@@ -125,7 +163,7 @@ export async function updateUser(id: string, data: any) {
   }
 
   if (data.password) {
-    updateData.password = bcrypt.hashSync(data.password, 10);
+    updateData.password = hashSync(data.password, 10);
   }
 
   await db.update(users).set(updateData).where(eq(users.id, id));

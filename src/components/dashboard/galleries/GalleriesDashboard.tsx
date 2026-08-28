@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Edit, Upload, Image as ImageIcon, Loader2, ArrowLeft, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { Plus, Trash2, Edit, Upload, Image as ImageIcon, Loader2, ArrowLeft, ToggleLeft, ToggleRight, X, Check, AlertTriangle } from "lucide-react";
 import { uploadMedia, toggleMediaActive, deleteMedia } from "@/app/actions/media";
 import { 
   createGalleryCollection, 
@@ -50,6 +50,12 @@ export default function GalleriesDashboard({ initialCollections }: GalleriesDash
   const [editingId, setEditingId] = useState("");
   const [isSavingCollection, setIsSavingCollection] = useState(false);
   const [modalError, setModalError] = useState("");
+
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   // Gallery image upload state
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
@@ -193,7 +199,7 @@ export default function GalleriesDashboard({ initialCollections }: GalleriesDash
         setSelectedCollection(null);
       }
     } catch (err: any) {
-      alert(err.message || "Error al eliminar la colección.");
+      showNotification("error", err.message || "Error al eliminar la colección.");
     }
   };
 
@@ -252,7 +258,7 @@ export default function GalleriesDashboard({ initialCollections }: GalleriesDash
         prev.map((img) => (img.id === id ? { ...img, isActive: !currentStatus } : img))
       );
     } catch (err: any) {
-      alert(err.message || "Error al cambiar estado");
+      showNotification("error", err.message || "Error al cambiar estado");
     }
   };
 
@@ -263,13 +269,23 @@ export default function GalleriesDashboard({ initialCollections }: GalleriesDash
       await deleteMedia(id);
       setCollectionImages((prev) => prev.filter((img) => img.id !== id));
     } catch (err: any) {
-      alert(err.message || "Error al eliminar");
+      showNotification("error", err.message || "Error al eliminar");
     }
   };
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto animate-fade-in pb-12 font-secondary">
-      
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <Check className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b pb-5 border-base-300 flex justify-between items-center">
         <div>

@@ -12,6 +12,16 @@ export default async function BookOpenPage() {
   }
   const brochures = await getBrochures();
   const floorsData = (await getFloorsData()) as Floor[];
+  const isSuperAdmin = session.user.role === "SUPER_ADMIN";
+
+  const filteredFloorsData = isSuperAdmin
+    ? floorsData
+    : floorsData
+        .filter((f) => f.id !== "floor_9" && f.id !== "9")
+        .map((f) => ({
+          ...f,
+          units: f.units.filter((u) => u.identifier !== "Terraza"),
+        }));
 
   // Convert Date objects to serialize properly if passing to Client Components in Next.js
   const serializedBrochures = brochures.map(b => ({
@@ -27,7 +37,7 @@ export default async function BookOpenPage() {
   return (
     <BrochureDashboard
       initialBrochures={serializedBrochures}
-      floorsData={floorsData}
+      floorsData={filteredFloorsData}
       currentUserRole={(session.user.role as string) || "SELLER"}
     />
   );

@@ -4,7 +4,7 @@ import { type Unit, UnitStatusString } from '@/data/floors';
 interface UnitCardProps {
   unit: Unit;
   floorId: string;
-  onOpenConsultation: (e: React.MouseEvent, unitId: string) => void;
+  onOpenConsultation: (e: React.MouseEvent, unitId: string, unitIdentifier?: string) => void;
   onNavigate: (path: string) => void;
 }
 
@@ -69,7 +69,7 @@ const UnitCard = ({
                             e.stopPropagation();
                             onNavigate(`/unidad/${unit.id}`);
                         } else {
-                            onOpenConsultation(e, unit.id);
+                            onOpenConsultation(e, unit.id, unit.identifier);
                         }
                     }}
                     className="flex-1 py-2 px-2 rounded bg-gray-100 hover:bg-gray-200 text-[10px] font-bold uppercase tracking-wider transition-colors text-gray-700"

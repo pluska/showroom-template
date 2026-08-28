@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,29 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.wrangler/
+.open-next
+
+/.claude
+
+# drive downloads
+public/drive-download-*
+
+# Drop de originales del cliente (PNG 4K de 12-19 MB cada uno). Es material
+# fuente: se convierte a WebP y se sube a R2, no se versiona. Ver docs/02-ASSETS.md
+/FASES/
+/ENTREGAS/
+# Drop de iconos del cliente, con nombres de carpeta con espacios y acentos.
+# La copia que usa la app vive aplanada bajo public/icons/.
+/public/new_ICONOS/
+# Videos fuente sueltos en public/: Cloudflare Pages rechaza cualquier asset
+# de más de 25 MiB y tumba el build. Los videos se sirven desde R2.
+public/**/*.mp4
+public/*.mp4
+public/**/*.mov
+public/*.mov
+
+# Semilla local de usuarios con hashes reales. La plantilla versionada es
+# src/lib/db/insert-users.sql; las credenciales de verdad nunca se commitean.
+.users.local.sql

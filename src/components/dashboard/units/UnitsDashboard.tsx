@@ -1,66 +1,31 @@
 "use client";
 
-import React, { useState, useTransition, useMemo, useEffect } from "react";
-import { getAssetUrl } from "@/utils/assets";
+import React, { useState, useTransition, useMemo } from "react";
 import {
-  Building,
   LayoutGrid,
   TableProperties,
   Kanban,
-  Plus,
-  Edit,
-  Trash2,
-  X,
+  Search,
+  Check,
+  AlertTriangle,
   ExternalLink,
+  User as UserIcon,
+  Maximize2,
+  Building2,
+  MapPin,
+  Compass,
+  Layers,
   ChevronRight,
-  ChevronDown,
   Eye,
   Bed,
   Bath,
-  Maximize,
-  AlertTriangle,
-  FileSpreadsheet,
-  Check,
-  Compass,
-  Mail,
-  Copy,
+  Edit,
+  X,
+  Sparkles,
+  Download,
+  Filter,
 } from "lucide-react";
-import {
-  createFloor,
-  updateFloor,
-  deleteFloor,
-  createUnit,
-  updateUnit,
-  deleteUnit,
-  updateUnitState,
-} from "@/app/actions/units";
-
-// Floor and Unit Typings
-interface Floor {
-  id: string;
-  name: string;
-  level: number;
-  type: string;
-  imagePath?: string | null;
-}
-
-interface Unit {
-  id: string;
-  floorId: string;
-  identifier: string;
-  type?: string | null;
-  bedrooms?: number | null;
-  bathrooms?: number | null;
-  areaSqm?: number | null;
-  state: string;
-  buyerName?: string | null;
-  tourUrl?: string | null;
-  photosFurnished: string[];
-  photosUnfurnished: string[];
-  photosPlans: string[];
-  photosBalcony: string[];
-  gallery: string[];
-}
+import { UrbanizationUnit, updateUrbanizationUnitState } from "@/app/actions/units";
 
 interface User {
   id: string;
@@ -70,24 +35,37 @@ interface User {
 }
 
 interface UnitsDashboardProps {
-  initialFloors: Floor[];
-  initialUnits: Unit[];
+  initialUnits: UrbanizationUnit[];
   currentUser: User;
 }
 
+type ZoneTab = "zone-1" | "zone-2" | "zone-3";
+type ViewMode = "grid" | "table" | "kanban";
+
 export default function UnitsDashboard({
-  initialFloors,
   initialUnits,
   currentUser,
 }: UnitsDashboardProps) {
-  const [floors, setFloors] = useState<Floor[]>(initialFloors);
-  const [units, setUnits] = useState<Unit[]>(initialUnits);
-  const [activeView, setActiveView] = useState<"grid" | "table" | "kanban">("grid");
-  const [selectedFloorId, setSelectedFloorId] = useState<string | null>(null);
+  const [units, setUnits] = useState<UrbanizationUnit[]>(initialUnits);
+  const [activeZone, setActiveZone] = useState<ZoneTab>("zone-1");
+  const [activeView, setActiveView] = useState<ViewMode>("grid");
+
+  // Filtros secundarios para Lotes (Zonas 1 y 2)
+  const [selectedBlock, setSelectedBlock] = useState<string>("ALL"); // "ALL", "mz-k", etc.
+  const [selectedPosition, setSelectedPosition] = useState<string>("ALL"); // "ALL", "Esquinera", "Medianera"
+
+  // Filtros secundarios para Torres (Zona 3)
+  const [selectedTower, setSelectedTower] = useState<string>("ALL"); // "ALL", "tower-a", "tower-b", "tower-c"
+  const [selectedFloorLevel, setSelectedFloorLevel] = useState<string>("ALL"); // "ALL", "1", "2", "3", "4", "5", "6"
+  const [selectedApartmentType, setSelectedApartmentType] = useState<string>("ALL"); // "ALL", "depa-1", etc.
+
+  // Filtros generales
+  const [selectedStatus, setSelectedStatus] = useState<string>("ALL"); // "ALL", "AVAILABLE", "RESERVED", "SOLD"
   const [searchQuery, setSearchQuery] = useState("");
+
   const [isPending, startTransition] = useTransition();
 
-  // Feedback notifications
+  // Notificaciones
   const [notification, setNotification] = useState<{
     type: "success" | "error";
     message: string;
@@ -95,416 +73,209 @@ export default function UnitsDashboard({
 
   const showNotification = (type: "success" | "error", message: string) => {
     setNotification({ type, message });
-    setTimeout(() => setNotification(null), 5000);
+    setTimeout(() => setNotification(null), 4500);
   };
 
-  // Auth permissions
+  // Modal de Detalle / Edición
+  const [selectedUnit, setSelectedUnit] = useState<UrbanizationUnit | null>(null);
+  const [modalBuyerName, setModalBuyerName] = useState("");
+  const [modalState, setModalState] = useState<"AVAILABLE" | "RESERVED" | "SOLD" | "COMMON_AREA">("AVAILABLE");
+  const [isSaving, setIsSaving] = useState(false);
+
   const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
   const isSupervisor = currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
 
-  // ----------------------------------------------------
-  // FORM & MODAL STATES
-  // ----------------------------------------------------
-
-  // Floor CRUD
-  const [isFloorModalOpen, setIsFloorModalOpen] = useState(false);
-  const [floorEditing, setFloorEditing] = useState<Floor | null>(null);
-  const [floorForm, setFloorForm] = useState({
-    name: "",
-    level: 0,
-    type: "Piso",
-    imagePath: "",
-  });
-
-  // Floor deletion confirmation
-  const [isDeleteFloorConfirmOpen, setIsDeleteFloorConfirmOpen] = useState(false);
-  const [floorToDelete, setFloorToDelete] = useState<Floor | null>(null);
-
-  // Unit CRUD
-  const [isUnitModalOpen, setIsUnitModalOpen] = useState(false);
-  const [unitEditing, setUnitEditing] = useState<Unit | null>(null);
-  const [unitForm, setUnitForm] = useState({
-    floorId: "",
-    identifier: "",
-    type: "",
-    bedrooms: 0,
-    bathrooms: 0,
-    areaSqm: 0,
-    state: "AVAILABLE",
-    tourUrl: "",
-    photosFurnishedText: "",
-    photosUnfurnishedText: "",
-    photosPlansText: "",
-    photosBalconyText: "",
-  });
-
-  // Unit Deletion
-  const [isDeleteUnitConfirmOpen, setIsDeleteUnitConfirmOpen] = useState(false);
-  const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
-
-  // Unit Details Viewer
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
-  const [activeDetailTab, setActiveDetailTab] = useState<
-    "furnished" | "unfurnished" | "plans" | "balcony" | "gallery" | "brochure"
-  >("furnished");
-  const [unitBrochureUrl, setUnitBrochureUrl] = useState<string | null>(null);
-  const [loadingBrochure, setLoadingBrochure] = useState(false);
-
-  useEffect(() => {
-    if (selectedUnit && activeDetailTab === "brochure") {
-      setLoadingBrochure(true);
-      fetch(`/api/brochure/active?unitId=${selectedUnit.id}`)
-        .then((res) => res.json())
-        .then((data: any) => {
-          if (data && data.url) {
-            setUnitBrochureUrl(data.url);
-          } else {
-            setUnitBrochureUrl(null);
-          }
-        })
-        .catch((err) => {
-          console.error("Error loading brochure:", err);
-          setUnitBrochureUrl(null);
-        })
-        .finally(() => {
-          setLoadingBrochure(false);
-        });
-    }
-  }, [selectedUnit, activeDetailTab]);
-
-  const getAbsoluteBrochureUrl = (url: string | null) => {
-    if (!url) return "";
-    const resolved = getAssetUrl(url);
-    if (resolved.startsWith("http")) return resolved;
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}${resolved.startsWith("/") ? "" : "/"}${resolved}`;
-    }
-    return resolved;
+  // Cambio de zona limpia filtros secundarios
+  const handleZoneChange = (zone: ZoneTab) => {
+    setActiveZone(zone);
+    setSelectedBlock("ALL");
+    setSelectedPosition("ALL");
+    setSelectedTower("ALL");
+    setSelectedFloorLevel("ALL");
+    setSelectedApartmentType("ALL");
   };
 
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyLink = () => {
-    const absoluteUrl = getAbsoluteBrochureUrl(unitBrochureUrl);
-    if (!absoluteUrl) return;
-    navigator.clipboard.writeText(absoluteUrl)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      })
-      .catch((err) => {
-        console.error("Failed to copy link:", err);
-      });
-  };
-
-  // ----------------------------------------------------
-  // HANDLERS - FLOOR
-  // ----------------------------------------------------
-
-  const openAddFloorModal = () => {
-    setFloorEditing(null);
-    setFloorForm({ name: "", level: floors.length + 1, type: "Piso", imagePath: "" });
-    setIsFloorModalOpen(true);
-  };
-
-  const openEditFloorModal = (floor: Floor, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFloorEditing(floor);
-    setFloorForm({
-      name: floor.name,
-      level: floor.level,
-      type: floor.type,
-      imagePath: floor.imagePath || "",
-    });
-    setIsFloorModalOpen(true);
-  };
-
-  const handleFloorSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isSuperAdmin) return;
-
-    startTransition(async () => {
-      try {
-        if (floorEditing) {
-          const updated = await updateFloor(floorEditing.id, floorForm);
-          setFloors(floors.map((f) => (f.id === updated.id ? updated : f)));
-          showNotification("success", `Planta "${updated.name}" actualizada con éxito.`);
-        } else {
-          const created = await createFloor(floorForm);
-          setFloors([...floors, created].sort((a, b) => a.level - b.level));
-          showNotification("success", `Planta "${created.name}" creada con éxito.`);
-        }
-        setIsFloorModalOpen(false);
-      } catch (err: any) {
-        showNotification("error", err.message || "Error al guardar planta.");
-      }
-    });
-  };
-
-  const confirmDeleteFloor = (floor: Floor, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFloorToDelete(floor);
-    setIsDeleteFloorConfirmOpen(true);
-  };
-
-  const handleDeleteFloor = async () => {
-    if (!floorToDelete || !isSuperAdmin) return;
-
-    startTransition(async () => {
-      try {
-        const res = await deleteFloor(floorToDelete.id);
-        setFloors(floors.filter((f) => f.id !== floorToDelete.id));
-        // Soft delete units in local state too
-        setUnits(units.filter((u) => u.floorId !== floorToDelete.id));
-        showNotification(
-          "success",
-          `Planta eliminada con éxito. Se eliminaron ${res.deletedUnitsCount} unidades asociadas.`
-        );
-        setIsDeleteFloorConfirmOpen(false);
-        setFloorToDelete(null);
-      } catch (err: any) {
-        showNotification("error", err.message || "Error al eliminar planta.");
-      }
-    });
-  };
-
-  // ----------------------------------------------------
-  // HANDLERS - UNIT
-  // ----------------------------------------------------
-
-  const openAddUnitModal = (floorId: string) => {
-    setUnitEditing(null);
-    setUnitForm({
-      floorId,
-      identifier: "",
-      type: "Flat",
-      bedrooms: 1,
-      bathrooms: 1,
-      areaSqm: 45,
-      state: "AVAILABLE",
-      tourUrl: "",
-      photosFurnishedText: "",
-      photosUnfurnishedText: "",
-      photosPlansText: "",
-      photosBalconyText: "",
-    });
-    setIsUnitModalOpen(true);
-  };
-
-  const openEditUnitModal = (unit: Unit, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setUnitEditing(unit);
-    setUnitForm({
-      floorId: unit.floorId,
-      identifier: unit.identifier,
-      type: unit.type || "",
-      bedrooms: unit.bedrooms || 0,
-      bathrooms: unit.bathrooms || 0,
-      areaSqm: unit.areaSqm || 0,
-      state: unit.state,
-      tourUrl: unit.tourUrl || "",
-      photosFurnishedText: unit.photosFurnished.join("\n"),
-      photosUnfurnishedText: unit.photosUnfurnished.join("\n"),
-      photosPlansText: unit.photosPlans.join("\n"),
-      photosBalconyText: unit.photosBalcony.join("\n"),
-    });
-    setIsUnitModalOpen(true);
-  };
-
-  const handleUnitSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isSuperAdmin) return;
-
-    const payload = {
-      floorId: unitForm.floorId,
-      identifier: unitForm.identifier,
-      type: unitForm.type,
-      bedrooms: Number(unitForm.bedrooms),
-      bathrooms: Number(unitForm.bathrooms),
-      areaSqm: Number(unitForm.areaSqm),
-      state: unitForm.state,
-      tourUrl: unitForm.tourUrl,
-      photosFurnished: unitForm.photosFurnishedText
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      photosUnfurnished: unitForm.photosUnfurnishedText
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      photosPlans: unitForm.photosPlansText
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      photosBalcony: unitForm.photosBalconyText
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    };
-
-    startTransition(async () => {
-      try {
-        if (unitEditing) {
-          const updated = await updateUnit(unitEditing.id, payload);
-          setUnits(
-            units.map((u) =>
-              u.id === updated.id
-                ? ({
-                    ...updated,
-                    photosFurnished: (updated.photosFurnished as string[]) || [],
-                    photosUnfurnished: (updated.photosUnfurnished as string[]) || [],
-                    photosPlans: (updated.photosPlans as string[]) || [],
-                    photosBalcony: (updated.photosBalcony as string[]) || [],
-                    gallery: (updated.gallery as string[]) || [],
-                  } as Unit)
-                : u
-            )
-          );
-          showNotification("success", `Unidad "${updated.identifier}" actualizada.`);
-        } else {
-          const created = await createUnit(payload);
-          setUnits([
-            ...units,
-            {
-              ...created,
-              photosFurnished: (created.photosFurnished as string[]) || [],
-              photosUnfurnished: (created.photosUnfurnished as string[]) || [],
-              photosPlans: (created.photosPlans as string[]) || [],
-              photosBalcony: (created.photosBalcony as string[]) || [],
-              gallery: (created.gallery as string[]) || [],
-            } as Unit,
-          ]);
-          showNotification("success", `Unidad "${created.identifier}" creada.`);
-        }
-        setIsUnitModalOpen(false);
-      } catch (err: any) {
-        showNotification("error", err.message || "Error al guardar unidad.");
-      }
-    });
-  };
-
-  const confirmDeleteUnit = (unit: Unit, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setUnitToDelete(unit);
-    setIsDeleteUnitConfirmOpen(true);
-  };
-
-  const handleDeleteUnit = async () => {
-    if (!unitToDelete || !isSuperAdmin) return;
-
-    startTransition(async () => {
-      try {
-        await deleteUnit(unitToDelete.id);
-        setUnits(units.filter((u) => u.id !== unitToDelete.id));
-        showNotification("success", `Unidad "${unitToDelete.identifier}" eliminada.`);
-        setIsDeleteUnitConfirmOpen(false);
-        setUnitToDelete(null);
-      } catch (err: any) {
-        showNotification("error", err.message || "Error al eliminar unidad.");
-      }
-    });
-  };
-
-  // State modification (Kanban drag-drop or details change)
-  const handleStatusChange = async (unitId: string, newState: string) => {
-    const unitToMove = units.find((u) => u.id === unitId);
-    if (!unitToMove) return;
-
-    if (unitToMove.state === newState) return;
-
-    startTransition(async () => {
-      try {
-        const updated = await updateUnitState(unitId, newState);
-        setUnits(
-          units.map((u) =>
-            u.id === updated.id ? { ...u, state: updated.state } : u
-          )
-        );
-        showNotification(
-          "success",
-          `Estado de unidad "${unitToMove.identifier}" cambiado a ${getStateLabel(newState)}.`
-        );
-
-        // Update selectedUnit if it's the one opened
-        if (selectedUnit && selectedUnit.id === unitId) {
-          setSelectedUnit((prev) => (prev ? { ...prev, state: updated.state } : null));
-        }
-      } catch (err: any) {
-        showNotification("error", err.message || "Error al cambiar el estado.");
-      }
-    });
-  };
-
-  // ----------------------------------------------------
-  // HELPERS & GETTERS
-  // ----------------------------------------------------
-
-  const getStateLabel = (state: string) => {
-    switch (state) {
-      case "AVAILABLE":
-        return "Disponible";
-      case "RESERVED":
-        return "Apartado";
-      case "SOLD":
-        return "Vendido";
-      case "COMMON_AREA":
-        return "Área Común";
-      default:
-        return state;
-    }
-  };
-
-  const getStateColor = (state: string) => {
-    switch (state) {
-      case "AVAILABLE":
-        return "badge-success text-success bg-success/10 border-success/20";
-      case "RESERVED":
-        return "badge-warning text-warning bg-warning/10 border-warning/20";
-      case "SOLD":
-        return "badge-error text-error bg-error/10 border-error/20";
-      case "COMMON_AREA":
-        return "badge-info text-info bg-info/10 border-info/20";
-      default:
-        return "badge-neutral";
-    }
-  };
-
-  const openDetailsModal = (unit: Unit) => {
-    setSelectedUnit(unit);
-    // For non-SuperAdmin roles, auto-select the first tab that has content
-    if (!isSuperAdmin) {
-      if (unit.photosFurnished.length > 0) setActiveDetailTab("furnished");
-      else if (unit.photosUnfurnished.length > 0) setActiveDetailTab("unfurnished");
-      else if (unit.photosPlans.length > 0) setActiveDetailTab("plans");
-      else if (unit.photosBalcony.length > 0) setActiveDetailTab("balcony");
-      else if (unit.gallery.length > 0) setActiveDetailTab("gallery");
-      else setActiveDetailTab("brochure");
-    } else {
-      setActiveDetailTab("furnished");
-    }
-    setIsDetailsModalOpen(true);
-  };
-
-  // Filtered units for Table View & General query matching
+  // Filtrado de unidades según la zona y controles activos
   const filteredUnits = useMemo(() => {
     return units.filter((u) => {
-      const matchQuery =
-        u.identifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (u.type && u.type.toLowerCase().includes(searchQuery.toLowerCase()));
+      // 1. Filtro de Zona
+      if (u.zoneId !== activeZone) return false;
 
-      return matchQuery;
+      // 2. Filtros para Zonas de Lotes (Zona 1 y Zona 2)
+      if (activeZone === "zone-1" || activeZone === "zone-2") {
+        if (selectedBlock !== "ALL" && u.blockId !== selectedBlock) return false;
+        if (selectedPosition !== "ALL" && u.lotPosition !== selectedPosition) return false;
+      }
+
+      // 3. Filtros para Zona de Torres (Zona 3)
+      if (activeZone === "zone-3") {
+        if (selectedTower !== "ALL" && u.towerId !== selectedTower) return false;
+        if (selectedFloorLevel !== "ALL" && String(u.floorLevel) !== selectedFloorLevel) return false;
+        if (selectedApartmentType !== "ALL" && u.apartmentTypeId !== selectedApartmentType) return false;
+      }
+
+      // 4. Filtro de Estado Comercial
+      if (selectedStatus !== "ALL" && u.state !== selectedStatus) return false;
+
+      // 5. Buscador en texto libre
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesCode = u.code.toLowerCase().includes(query);
+        const matchesIdentifier = u.identifier.toLowerCase().includes(query);
+        const matchesBuyer = u.buyerName ? u.buyerName.toLowerCase().includes(query) : false;
+        const matchesType = u.type.toLowerCase().includes(query);
+        if (!matchesCode && !matchesIdentifier && !matchesBuyer && !matchesType) {
+          return false;
+        }
+      }
+
+      return true;
     });
-  }, [units, searchQuery]);
+  }, [
+    units,
+    activeZone,
+    selectedBlock,
+    selectedPosition,
+    selectedTower,
+    selectedFloorLevel,
+    selectedApartmentType,
+    selectedStatus,
+    searchQuery,
+  ]);
+
+  // Contadores globales por zona
+  const zoneStats = useMemo(() => {
+    const forZone = units.filter((u) => u.zoneId === activeZone);
+    const available = forZone.filter((u) => u.state === "AVAILABLE").length;
+    const reserved = forZone.filter((u) => u.state === "RESERVED").length;
+    const sold = forZone.filter((u) => u.state === "SOLD").length;
+    return {
+      total: forZone.length,
+      available,
+      reserved,
+      sold,
+      percentageSold: forZone.length > 0 ? Math.round(((sold + reserved) / forZone.length) * 100) : 0,
+    };
+  }, [units, activeZone]);
+
+  // Opciones de Manzanas disponibles para la zona actual
+  const availableBlocks = useMemo(() => {
+    if (activeZone === "zone-1") {
+      return [
+        { id: "mz-o", letter: "Mz. O", count: 15 },
+        { id: "mz-p", letter: "Mz. P", count: 14 },
+        { id: "mz-q", letter: "Mz. Q", count: 28 },
+        { id: "mz-r", letter: "Mz. R", count: 12 },
+      ];
+    }
+    if (activeZone === "zone-2") {
+      return [
+        { id: "mz-k", letter: "Mz. K", count: 16 },
+        { id: "mz-l", letter: "Mz. L", count: 18 },
+        { id: "mz-m", letter: "Mz. M", count: 16 },
+        { id: "mz-n", letter: "Mz. N", count: 14 },
+      ];
+    }
+    return [];
+  }, [activeZone]);
+
+  // Cambio rápido de estado desde Grilla o Tabla
+  const handleQuickStatusChange = async (
+    unit: UrbanizationUnit,
+    newState: "AVAILABLE" | "RESERVED" | "SOLD" | "COMMON_AREA"
+  ) => {
+    if (unit.state === newState) return;
+
+    // Validación de reversión
+    const isReversion =
+      (unit.state === "SOLD" && (newState === "RESERVED" || newState === "AVAILABLE")) ||
+      (unit.state === "RESERVED" && newState === "AVAILABLE");
+
+    if (isReversion && !isSupervisor) {
+      showNotification(
+        "error",
+        "Revertir una unidad reservada o vendida requiere autorización de Supervisor / Administrador."
+      );
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await updateUrbanizationUnitState(unit.id, newState, unit.buyerName, {
+          floorOrBlockId: unit.blockId || unit.floorId || "urbanization",
+          identifier: unit.identifier,
+          areaSqm: unit.areaSqm,
+          type: unit.type,
+        });
+
+        setUnits((prev) =>
+          prev.map((u) => (u.id === unit.id ? { ...u, state: newState } : u))
+        );
+
+        showNotification(
+          "success",
+          `${unit.code} actualizado a ${
+            newState === "AVAILABLE" ? "Disponible" : newState === "RESERVED" ? "Reservado" : "Vendido"
+          }`
+        );
+      } catch (e: any) {
+        showNotification("error", e.message || "Error al actualizar estado");
+      }
+    });
+  };
+
+  // Abrir Modal de Detalle
+  const openDetailModal = (unit: UrbanizationUnit) => {
+    setSelectedUnit(unit);
+    setModalBuyerName(unit.buyerName || "");
+    setModalState(unit.state);
+  };
+
+  const closeDetailModal = () => {
+    setSelectedUnit(null);
+  };
+
+  // Guardar cambios desde Modal
+  const handleSaveModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUnit) return;
+
+    setIsSaving(true);
+    try {
+      await updateUrbanizationUnitState(selectedUnit.id, modalState, modalBuyerName, {
+        floorOrBlockId: selectedUnit.blockId || selectedUnit.floorId || "urbanization",
+        identifier: selectedUnit.identifier,
+        areaSqm: selectedUnit.areaSqm,
+        type: selectedUnit.type,
+      });
+
+      setUnits((prev) =>
+        prev.map((u) =>
+          u.id === selectedUnit.id
+            ? { ...u, state: modalState, buyerName: modalBuyerName || null }
+            : u
+        )
+      );
+
+      showNotification("success", `Unidad ${selectedUnit.code} actualizada con éxito.`);
+      closeDetailModal();
+    } catch (e: any) {
+      showNotification("error", e.message || "Error al guardar los cambios.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-6 w-full animate-fade-in relative min-h-screen pb-20">
-      {/* Toast Notification */}
+    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto animate-fade-in pb-16 px-2 sm:px-4">
+      {/* Notificación flotante */}
       {notification && (
-        <div className="toast toast-top toast-end z-[100] top-20 right-6">
+        <div className="toast toast-top toast-end z-[110]">
           <div
             className={`alert shadow-lg ${
-              notification.type === "success" ? "alert-success text-white" : "alert-error text-white"
+              notification.type === "success"
+                ? "alert-success text-white bg-green-600 border-none"
+                : "alert-error text-white bg-red-600 border-none"
             }`}
           >
             <div>
@@ -513,1144 +284,812 @@ export default function UnitsDashboard({
               ) : (
                 <AlertTriangle className="w-5 h-5 shrink-0" />
               )}
-              <span>{notification.message}</span>
+              <span className="text-sm font-medium">{notification.message}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header controls */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-base-100/70 dark:bg-base-100/70 backdrop-blur-md p-4 rounded-xl shadow-sm border border-base-200 dark:border-base-300 dark:border-base-200">
-        <div>
-          <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
-            <Building className="w-6 h-6 text-brand-orange animate-pulse" />
-            Módulo de Unidades y Plantas
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm font-secondary">
-            Gestiona los pisos, planos y estados de las unidades inmobiliarias.
-          </p>
+      {/* Cabecera Principal */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-base-200 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-brand-orange shrink-0">
+            <Building2 className="w-7 h-7" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold font-primary text-gray-900 flex items-center gap-2">
+              Módulo de Unidades, Manzanas y Torres
+            </h1>
+            <p className="text-gray-500 text-sm font-secondary mt-0.5">
+              Gestiona el inventario comercial, disponibilidad y asignación de compradores del proyecto.
+            </p>
+          </div>
         </div>
 
-        {/* View togglers & actions */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* View Mode Toggle */}
-          <div className="join bg-base-200 p-1 rounded-lg">
-            <button
-              onClick={() => setActiveView("grid")}
-              className={`join-item btn btn-sm border-none shadow-none hover:bg-base-300 ${
-                activeView === "grid" ? "bg-white dark:bg-base-100 text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4 mr-1" />
-              Grilla
-            </button>
-            <button
-              onClick={() => setActiveView("table")}
-              className={`join-item btn btn-sm border-none shadow-none hover:bg-base-300 ${
-                activeView === "table" ? "bg-white dark:bg-base-100 text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"
-              }`}
-            >
-              <TableProperties className="w-4 h-4 mr-1" />
-              Tabla
-            </button>
-            <button
-              onClick={() => setActiveView("kanban")}
-              className={`join-item btn btn-sm border-none shadow-none hover:bg-base-300 ${
-                activeView === "kanban" ? "bg-white dark:bg-base-100 text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"
-              }`}
-            >
-              <Kanban className="w-4 h-4 mr-1" />
-              Kanban
-            </button>
+        {/* Métricas rápidas de la Zona Activa */}
+        <div className="flex items-center gap-3 bg-base-50 p-2.5 rounded-xl border border-base-200">
+          <div className="px-3 py-1 bg-white rounded-lg shadow-xs border border-gray-100 text-center">
+            <div className="text-[10px] uppercase font-bold text-gray-600">Total</div>
+            <div className="text-base font-extrabold text-gray-900">{zoneStats.total}</div>
           </div>
-
-          {/* Search Box (For Table/Kanban filtering) */}
-          {activeView !== "grid" && (
-            <input
-              type="text"
-              placeholder="Buscar unidad..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input input-bordered input-sm w-44"
-            />
-          )}
-
-          {/* Add Floor Trigger */}
-          {isSuperAdmin && (
-            <button onClick={openAddFloorModal} className="btn btn-sm btn-warning bg-brand-orange hover:bg-brand-dark-orange text-white">
-              <Plus className="w-4 h-4 mr-1" />
-              Añadir Planta
-            </button>
-          )}
+          <div className="px-3 py-1 bg-green-50 rounded-lg border border-green-200 text-center">
+            <div className="text-[10px] uppercase font-bold text-green-800">Disponibles</div>
+            <div className="text-base font-extrabold text-green-700">{zoneStats.available}</div>
+          </div>
+          <div className="px-3 py-1 bg-yellow-50 rounded-lg border border-yellow-200 text-center">
+            <div className="text-[10px] uppercase font-bold text-yellow-800">Reservados</div>
+            <div className="text-base font-extrabold text-yellow-700">{zoneStats.reserved}</div>
+          </div>
+          <div className="px-3 py-1 bg-red-50 rounded-lg border border-red-200 text-center">
+            <div className="text-[10px] uppercase font-bold text-red-800">Vendidos</div>
+            <div className="text-base font-extrabold text-red-700">{zoneStats.sold}</div>
+          </div>
         </div>
       </div>
 
-      {/* ----------------------------------------------------
-          1. GRID VIEW - Floor-by-floor view
-          ---------------------------------------------------- */}
-      {activeView === "grid" && (
-        <div className="flex flex-col gap-4">
-          {floors.length === 0 ? (
-            <div className="card bg-base-100 border border-base-200 dark:border-base-300 dark:border-base-200 shadow-sm p-12 text-center flex flex-col items-center">
-              <Building className="w-16 h-16 text-gray-300 mb-4" />
-              <h3 className="text-lg font-bold font-primary text-gray-700 dark:text-gray-200">No hay plantas</h3>
-              <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm mt-2 max-w-lg">
-                Actualmente no hay plantas creadas en tu proyecto. Haz click en añadir planta para empezar a configurar las plantas.
-              </p>
-              {isSuperAdmin && (
-                <button onClick={openAddFloorModal} className="btn btn-warning bg-brand-orange text-white mt-6">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Añadir Planta
-                </button>
-              )}
+      {/* 1. Selector Principal de Zonas */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <button
+          onClick={() => handleZoneChange("zone-1")}
+          className={`flex-1 flex items-center justify-between p-4 rounded-2xl border transition-all ${
+            activeZone === "zone-1"
+              ? "bg-white border-brand-orange ring-2 ring-brand-orange/20 shadow-md"
+              : "bg-white/70 hover:bg-white border-base-200 hover:border-gray-300"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                activeZone === "zone-1" ? "bg-brand-orange text-white" : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              <MapPin className="w-5 h-5" />
             </div>
-          ) : (
-            floors.map((floor) => {
-              const floorUnits = units.filter((u) => u.floorId === floor.id);
-              const isExpanded = selectedFloorId === floor.id;
+            <div className="text-left">
+              <div className="font-bold text-gray-900 text-base font-primary">Zona 1 · Lotes</div>
+              <div className="text-xs text-gray-500 font-secondary">Manzanas O, P, Q, R (69 Lotes)</div>
+            </div>
+          </div>
+          <span className="badge bg-base-200 text-gray-700 font-bold border-0">69 lotes</span>
+        </button>
 
-              return (
-                <div
-                  key={floor.id}
-                  className="card bg-base-100 border border-base-200 dark:border-base-300 dark:border-base-200 shadow-sm overflow-hidden"
+        <button
+          onClick={() => handleZoneChange("zone-2")}
+          className={`flex-1 flex items-center justify-between p-4 rounded-2xl border transition-all ${
+            activeZone === "zone-2"
+              ? "bg-white border-brand-orange ring-2 ring-brand-orange/20 shadow-md"
+              : "bg-white/70 hover:bg-white border-base-200 hover:border-gray-300"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                activeZone === "zone-2" ? "bg-brand-orange text-white" : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              <Compass className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <div className="font-bold text-gray-900 text-base font-primary">Zona 2 · Lotes</div>
+              <div className="text-xs text-gray-500 font-secondary">Manzanas K, L, M, N (64 Lotes)</div>
+            </div>
+          </div>
+          <span className="badge bg-base-200 text-gray-700 font-bold border-0">64 lotes</span>
+        </button>
+
+        <button
+          onClick={() => handleZoneChange("zone-3")}
+          className={`flex-1 flex items-center justify-between p-4 rounded-2xl border transition-all ${
+            activeZone === "zone-3"
+              ? "bg-white border-brand-orange ring-2 ring-brand-orange/20 shadow-md"
+              : "bg-white/70 hover:bg-white border-base-200 hover:border-gray-300"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                activeZone === "zone-3" ? "bg-brand-orange text-white" : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <div className="font-bold text-gray-900 text-base font-primary">Zona 3 · Torres</div>
+              <div className="text-xs text-gray-500 font-secondary">Torres A, B, C (60 Departamentos)</div>
+            </div>
+          </div>
+          <span className="badge bg-base-200 text-gray-700 font-bold border-0">60 depas</span>
+        </button>
+      </div>
+
+      {/* 2. Filtros Contextuales y Barra de Control */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-base-200 flex flex-col gap-4">
+        {/* Filtros específicos según Zona */}
+        {(activeZone === "zone-1" || activeZone === "zone-2") && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 mr-2">
+                <Layers className="w-4 h-4 text-brand-orange" /> Manzanas (Plantas):
+              </span>
+              <button
+                onClick={() => setSelectedBlock("ALL")}
+                className={`btn btn-sm rounded-xl font-medium ${
+                  selectedBlock === "ALL"
+                    ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
+                    : "btn-ghost text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                Todas las Manzanas
+              </button>
+              {availableBlocks.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => setSelectedBlock(b.id)}
+                  className={`btn btn-sm rounded-xl font-medium ${
+                    selectedBlock === b.id
+                      ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
+                      : "btn-ghost text-gray-600 hover:bg-gray-100"
+                  }`}
                 >
-                  {/* Floor Header Bar */}
-                  <div
-                    onClick={() => setSelectedFloorId(isExpanded ? null : floor.id)}
-                    className="p-4 flex justify-between items-center cursor-pointer hover:bg-base-100/50 transition-colors"
+                  {b.letter} ({b.count})
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                className="select select-sm select-bordered rounded-xl text-xs"
+                value={selectedPosition}
+                onChange={(e) => setSelectedPosition(e.target.value)}
+              >
+                <option value="ALL">Todas las Posiciones</option>
+                <option value="Esquinera">Esquineras</option>
+                <option value="Medianera">Medianeras</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Filtros específicos para Torres (Zona 3) */}
+        {activeZone === "zone-3" && (
+          <div className="flex flex-col gap-4 pb-4 border-b border-gray-100">
+            {/* Paso 1: Selector de Torre */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 mr-2">
+                <Building2 className="w-4 h-4 text-brand-orange" /> 1. Torre:
+              </span>
+              <button
+                onClick={() => setSelectedTower("ALL")}
+                className={`btn btn-sm rounded-xl font-medium ${
+                  selectedTower === "ALL"
+                    ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
+                    : "btn-ghost text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                Todas las Torres (60)
+              </button>
+              <button
+                onClick={() => setSelectedTower("tower-a")}
+                className={`btn btn-sm rounded-xl font-medium ${
+                  selectedTower === "tower-a"
+                    ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
+                    : "btn-ghost text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                Torre A (20)
+              </button>
+              <button
+                onClick={() => setSelectedTower("tower-b")}
+                className={`btn btn-sm rounded-xl font-medium ${
+                  selectedTower === "tower-b"
+                    ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
+                    : "btn-ghost text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                Torre B (20)
+              </button>
+              <button
+                onClick={() => setSelectedTower("tower-c")}
+                className={`btn btn-sm rounded-xl font-medium ${
+                  selectedTower === "tower-c"
+                    ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
+                    : "btn-ghost text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                Torre C (20)
+              </button>
+            </div>
+
+            {/* Paso 2: Selector de Piso / Planta y Tipología */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2 border-t border-dashed border-gray-100">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 mr-2">
+                  <Layers className="w-4 h-4 text-brand-orange" /> 2. Planta / Piso:
+                </span>
+                <button
+                  onClick={() => setSelectedFloorLevel("ALL")}
+                  className={`btn btn-xs rounded-lg ${
+                    selectedFloorLevel === "ALL" ? "btn-neutral text-white" : "btn-ghost text-gray-600"
+                  }`}
+                >
+                  Todos
+                </button>
+                {[1, 2, 3, 4, 5].map((lvl) => (
+                  <button
+                    key={lvl}
+                    onClick={() => setSelectedFloorLevel(String(lvl))}
+                    className={`btn btn-xs rounded-lg ${
+                      selectedFloorLevel === String(lvl)
+                        ? "btn-neutral text-white"
+                        : "btn-ghost text-gray-600"
+                    }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-lg bg-brand-orange/10 text-brand-orange">
-                        <Building className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold font-primary text-gray-800 dark:text-gray-100 text-lg">
-                          {floor.name}
-                        </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                          Nivel: {floor.level} • Tipo: {floor.type} • {floorUnits.length} Unidades
-                        </p>
-                      </div>
-                    </div>
+                    Piso {lvl}
+                  </button>
+                ))}
+              </div>
 
-                    <div className="flex items-center gap-3">
-                      {isSuperAdmin && (
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={(e) => openEditFloorModal(floor, e)}
-                            className="btn btn-ghost btn-circle btn-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-brand-orange"
-                            title="Editar Planta"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => confirmDeleteFloor(floor, e)}
-                            className="btn btn-ghost btn-circle btn-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-error"
-                            title="Eliminar Planta"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                      {isExpanded ? (
-                        <ChevronDown className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                      ) : (
-                        <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Expanded Floor Units Grid */}
-                  {isExpanded && (
-                    <div className="bg-base-200/50 dark:bg-base-300/50 p-6 border-t border-base-200 dark:border-base-300 dark:border-base-200 animate-slide-down">
-                      {floorUnits.length === 0 ? (
-                        <div className="text-center py-8 flex flex-col items-center">
-                          <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm">
-                            No existe unidades asignadas a esta planta. Haz click en añadir unidad, para empezar a configurar tus unidades.
-                          </p>
-                          {isSuperAdmin && (
-                            <button
-                              onClick={() => openAddUnitModal(floor.id)}
-                              className="btn btn-sm btn-outline border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white mt-4"
-                            >
-                              <Plus className="w-3.5 h-3.5 mr-1" />
-                              Añadir Unidad
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="flex justify-between items-center mb-4">
-                            <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300">Departamentos</h4>
-                            {isSuperAdmin && (
-                              <button
-                                onClick={() => openAddUnitModal(floor.id)}
-                                className="btn btn-xs btn-outline border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
-                              >
-                                <Plus className="w-3 h-3 mr-1" />
-                                Añadir Unidad
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                            {floorUnits.map((unit) => (
-                              <div
-                                key={unit.id}
-                                onClick={() => openDetailsModal(unit)}
-                                className="card bg-white dark:bg-base-100 p-4 shadow-sm border border-base-200 dark:border-base-300 dark:border-base-200 hover:shadow-md cursor-pointer transition-all hover:-translate-y-0.5 relative group"
-                              >
-                                {isSuperAdmin && (
-                                  <div
-                                    className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <button
-                                      onClick={(e) => openEditUnitModal(unit, e)}
-                                      className="p-1 rounded bg-base-100 border border-base-200 dark:border-base-300 dark:border-base-200 text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-brand-orange hover:scale-105"
-                                    >
-                                      <Edit className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => confirmDeleteUnit(unit, e)}
-                                      className="p-1 rounded bg-base-100 border border-base-200 dark:border-base-300 dark:border-base-200 text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-error hover:scale-105"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
-                                <div className="text-center">
-                                  <span className="font-bold text-gray-900 dark:text-white text-base font-primary block">
-                                    {unit.identifier}
-                                  </span>
-                                  <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500 block uppercase tracking-wider mt-0.5">
-                                    {unit.type || "Flat"}
-                                  </span>
-                                  <div className="mt-3">
-                                    <span
-                                      className={`badge badge-sm border ${getStateColor(
-                                        unit.state
-                                      )}`}
-                                    >
-                                      {getStateLabel(unit.state)}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-
-      {/* ----------------------------------------------------
-          2. TABLE VIEW - Full searchable report
-          ---------------------------------------------------- */}
-      {activeView === "table" && (
-        <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-base-200 dark:border-base-300 dark:border-base-200 overflow-hidden">
-          {filteredUnits.length === 0 ? (
-            <div className="p-12 text-center text-gray-500 dark:text-gray-400 dark:text-gray-500">
-              No se encontraron unidades con los criterios especificados.
+              <div className="flex items-center gap-2">
+                <select
+                  className="select select-sm select-bordered rounded-xl text-xs"
+                  value={selectedApartmentType}
+                  onChange={(e) => setSelectedApartmentType(e.target.value)}
+                >
+                  <option value="ALL">Todas las Tipologías</option>
+                  <option value="depa-1">Tipología 01 (Frente Izq)</option>
+                  <option value="depa-2">Tipología 02 (Frente Der)</option>
+                  <option value="depa-3">Tipología 03 (Fondo Der)</option>
+                  <option value="depa-4">Tipología 04 (Fondo Izq)</option>
+                </select>
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table table-md w-full">
-                <thead>
-                  <tr className="bg-base-200/50 dark:bg-base-300/50">
-                    <th>Unidad</th>
-                    <th>Planta</th>
-                    <th>Tipo Planta</th>
-                    <th>Tipo Unidad</th>
-                    <th>Hab.</th>
-                    <th>Baños</th>
-                    <th>Área</th>
-                    <th>Estado</th>
-                    {isSuperAdmin && <th className="text-right">Acciones</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUnits.map((unit) => {
-                    const floor = floors.find((f) => f.id === unit.floorId);
-                    return (
-                      <tr
-                        key={unit.id}
-                        onClick={() => openDetailsModal(unit)}
-                        className="hover:bg-base-100/50 cursor-pointer transition-colors"
-                      >
-                        <td className="font-bold text-gray-900 dark:text-white">{unit.identifier}</td>
-                        <td>{floor ? floor.name : "N/A"}</td>
-                        <td>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">{floor ? floor.type : "N/A"}</span>
-                        </td>
-                        <td>{unit.type || "Flat"}</td>
-                        <td>{unit.bedrooms}</td>
-                        <td>{unit.bathrooms}</td>
-                        <td>{unit.areaSqm} m²</td>
-                        <td>
-                          <span className={`badge badge-sm border ${getStateColor(unit.state)}`}>
-                            {getStateLabel(unit.state)}
-                          </span>
-                        </td>
-                        {isSuperAdmin && (
-                          <td className="text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex gap-1 justify-end">
-                              <button
-                                onClick={(e) => openEditUnitModal(unit, e)}
-                                className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-brand-orange"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => confirmDeleteUnit(unit, e)}
-                                className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-error"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* ----------------------------------------------------
-          3. KANBAN VIEW - Column state management
-          ---------------------------------------------------- */}
-      {activeView === "kanban" && (
-        <div className={`grid grid-cols-1 md:grid-cols-2 ${isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6 items-start`}>
-          {(isSuperAdmin 
-            ? (["AVAILABLE", "RESERVED", "SOLD", "COMMON_AREA"] as const)
-            : (["AVAILABLE", "RESERVED", "SOLD"] as const)
-          ).map((columnState) => {
-            const columnUnits = filteredUnits.filter((u) => u.state === columnState);
+        {/* Barra de Filtros Generales, Búsqueda y Switcher de Vista */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+          <div className="flex-1 flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por código, manzana, comprador o identificador..."
+                className="input input-bordered input-sm rounded-xl pl-9.5 w-full text-xs"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <select
+              className="select select-sm select-bordered rounded-xl text-xs w-44 shrink-0"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+            >
+              <option value="ALL">Todos los Estados</option>
+              <option value="AVAILABLE">🟢 Disponibles</option>
+              <option value="RESERVED">🟡 Reservados</option>
+              <option value="SOLD">🔴 Vendidos</option>
+            </select>
+          </div>
+
+          {/* Switcher de Vistas: Grilla, Tabla, Kanban */}
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 self-end md:self-auto">
+            <button
+              onClick={() => setActiveView("grid")}
+              className={`btn btn-xs rounded-lg gap-1 border-none ${
+                activeView === "grid" ? "bg-white text-gray-900 shadow-xs" : "btn-ghost text-gray-500"
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> Grilla
+            </button>
+            <button
+              onClick={() => setActiveView("table")}
+              className={`btn btn-xs rounded-lg gap-1 border-none ${
+                activeView === "table" ? "bg-white text-gray-900 shadow-xs" : "btn-ghost text-gray-500"
+              }`}
+            >
+              <TableProperties className="w-3.5 h-3.5" /> Tabla
+            </button>
+            <button
+              onClick={() => setActiveView("kanban")}
+              className={`btn btn-xs rounded-lg gap-1 border-none ${
+                activeView === "kanban" ? "bg-white text-gray-900 shadow-xs" : "btn-ghost text-gray-500"
+              }`}
+            >
+              <Kanban className="w-3.5 h-3.5" /> Kanban
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Renderizado de Unidades */}
+      {filteredUnits.length === 0 ? (
+        <div className="bg-white rounded-2xl p-12 text-center border border-base-200 shadow-sm flex flex-col items-center justify-center">
+          <Building2 className="w-16 h-16 text-gray-300 mb-3" />
+          <h3 className="text-lg font-bold text-gray-800">No se encontraron unidades</h3>
+          <p className="text-sm text-gray-500 max-w-md mt-1">
+            No hay unidades que coincidan con los filtros seleccionados o el término de búsqueda.
+          </p>
+          <button
+            onClick={() => {
+              setSelectedBlock("ALL");
+              setSelectedTower("ALL");
+              setSelectedFloorLevel("ALL");
+              setSelectedStatus("ALL");
+              setSearchQuery("");
+            }}
+            className="btn btn-sm btn-outline rounded-xl mt-4"
+          >
+            Limpiar Filtros
+          </button>
+        </div>
+      ) : activeView === "grid" ? (
+        /* VISTA GRILLA */
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          {filteredUnits.map((unit) => {
+            const previewImg =
+              unit.kind === "lot"
+                ? unit.planImageMeasured || unit.planImage
+                : unit.gallery?.[0] || unit.planImage;
 
             return (
               <div
-                key={columnState}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const unitId = e.dataTransfer.getData("text/plain");
-                  if (unitId) handleStatusChange(unitId, columnState);
-                }}
-                className="bg-base-200 p-4 rounded-xl border border-base-300 dark:border-base-200 min-h-[500px] flex flex-col gap-4"
+                key={unit.id}
+                className="group bg-white rounded-2xl border border-base-200 overflow-hidden hover:shadow-lg transition-all flex flex-col justify-between"
               >
-                {/* Column Header */}
-                <div className="flex justify-between items-center border-b pb-2 border-base-300 dark:border-base-200">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${
-                      columnState === "AVAILABLE"
-                        ? "bg-success"
-                        : columnState === "RESERVED"
-                        ? "bg-warning"
-                        : columnState === "SOLD"
-                        ? "bg-error"
-                        : "bg-info"
-                    }`} />
-                    <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">
-                      {getStateLabel(columnState)}
-                    </h3>
+                {/* Imagen Preview */}
+                <div className="aspect-[4/3] bg-base-100 relative overflow-hidden flex items-center justify-center border-b border-gray-100">
+                  {previewImg ? (
+                    <img
+                      src={previewImg}
+                      alt={unit.code}
+                      loading="lazy"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <Building2 className="w-12 h-12 text-gray-300" />
+                  )}
+
+                  {/* Badge de Estado Comercial */}
+                  <div className="absolute top-3 left-3">
+                    <span
+                      className={`badge badge-sm font-bold uppercase text-[9px] px-2.5 py-2 rounded-full shadow-xs ${
+                        unit.state === "AVAILABLE"
+                          ? "bg-green-500 text-white"
+                          : unit.state === "RESERVED"
+                          ? "bg-amber-400 text-gray-900"
+                          : unit.state === "SOLD"
+                          ? "bg-red-500 text-white"
+                          : "bg-gray-400 text-white"
+                      }`}
+                    >
+                      {unit.state === "AVAILABLE"
+                        ? "Disponible"
+                        : unit.state === "RESERVED"
+                        ? "Reservado"
+                        : unit.state === "SOLD"
+                        ? "Vendido"
+                        : "Área Común"}
+                    </span>
                   </div>
-                  <span className="badge badge-sm font-semibold">{columnUnits.length}</span>
+
+                  {/* Tag de Posición o Tipología */}
+                  <div className="absolute top-3 right-3">
+                    <span className="bg-black/65 text-white text-[10px] font-bold px-2 py-1 rounded-lg backdrop-blur-xs">
+                      {unit.kind === "lot"
+                        ? unit.lotPosition || "Lote"
+                        : unit.floorName}
+                    </span>
+                  </div>
+
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => openDetailModal(unit)}
+                      className="btn btn-sm bg-white hover:bg-gray-100 text-gray-900 rounded-xl font-bold border-0 shadow-lg flex items-center gap-1.5"
+                    >
+                      <Eye className="w-4 h-4 text-brand-orange" /> Ver Ficha
+                    </button>
+                  </div>
                 </div>
 
-                {/* Column Body Cards */}
-                <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
-                  {columnUnits.length === 0 ? (
-                    <div className="text-center text-xs text-gray-400 dark:text-gray-500 py-12 border-2 border-dashed border-base-300 dark:border-base-200 rounded-lg">
-                      Arrastra unidades aquí
+                {/* Info Card */}
+                <div className="p-4 flex flex-col gap-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-gray-900 font-primary text-base truncate">
+                        {unit.code}
+                      </h3>
+                      <span className="text-xs font-bold text-brand-orange">
+                        {unit.areaSqm} m²
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {unit.kind === "lot"
+                        ? `Manzana ${unit.blockLetter} · ${unit.identifier}`
+                        : `${unit.towerName} · Flat 3 Dorm.`}
+                    </p>
+                  </div>
+
+                  {/* Comprador Asignado */}
+                  {unit.buyerName ? (
+                    <div className="bg-gray-50 p-2 rounded-xl border border-gray-100 flex items-center gap-2">
+                      <UserIcon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                      <span className="text-xs font-medium text-gray-700 truncate">
+                        {unit.buyerName}
+                      </span>
                     </div>
                   ) : (
-                    columnUnits.map((unit) => {
-                      const floor = floors.find((f) => f.id === unit.floorId);
-                      return (
-                        <div
-                          key={unit.id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("text/plain", unit.id);
-                          }}
-                          onClick={() => openDetailsModal(unit)}
-                          className="bg-white dark:bg-base-100 p-4 rounded-lg shadow-sm border border-base-300 dark:border-base-200 hover:shadow cursor-grab active:cursor-grabbing hover:border-brand-orange/30 group transition-all"
-                        >
-                          <div className="flex justify-between items-start gap-2">
-                            <div>
-                              <span className="font-bold text-gray-900 dark:text-white font-primary text-sm block">
-                                {unit.identifier}
-                              </span>
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                                {floor ? floor.name : "Nivel N/A"}
-                              </span>
-                            </div>
-                            <span className="text-[10px] bg-base-100 border px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">
-                              {unit.type || "Flat"}
-                            </span>
-                          </div>
-
-                          <div className="flex justify-between items-center mt-4 text-[10px] text-gray-400 dark:text-gray-500 border-t pt-2">
-                            <span className="flex items-center gap-0.5">
-                              <Bed className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                              {unit.bedrooms}
-                            </span>
-                            <span className="flex items-center gap-0.5">
-                              <Bath className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                              {unit.bathrooms}
-                            </span>
-                            <span className="flex items-center gap-0.5">
-                              <Maximize className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-                              {unit.areaSqm} m²
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })
+                    <div className="text-[11px] text-gray-400 italic">
+                      Sin comprador asignado
+                    </div>
                   )}
+
+                  {/* Selector Rápido de Estado */}
+                  <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase">Estado:</span>
+                    <select
+                      className="select select-xs rounded-lg font-medium text-[11px] border border-gray-200 bg-white text-gray-700 focus:outline-none focus:border-brand-orange hover:border-gray-300 transition-colors shadow-2xs"
+                      value={unit.state}
+                      disabled={isPending}
+                      onChange={(e) =>
+                        handleQuickStatusChange(unit, e.target.value as any)
+                      }
+                    >
+                      <option value="AVAILABLE">Disponible</option>
+                      <option value="RESERVED">Reservado</option>
+                      <option value="SOLD">Vendido</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
-      )}
+      ) : activeView === "table" ? (
+        /* VISTA TABLA */
+        <div className="bg-white rounded-2xl shadow-sm border border-base-200 overflow-x-auto">
+          <table className="table table-zebra w-full text-xs">
+            <thead>
+              <tr className="bg-base-100 text-gray-600 font-bold uppercase text-[10px]">
+                <th>Código</th>
+                <th>Zona</th>
+                <th>Ubicación (Manzana / Torre)</th>
+                <th>Tipo</th>
+                <th>Área</th>
+                <th>Estado</th>
+                <th>Comprador</th>
+                <th className="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUnits.map((unit) => (
+                <tr key={unit.id} className="hover:bg-orange-50/40">
+                  <td className="font-bold text-gray-900 font-primary text-sm">
+                    {unit.code}
+                  </td>
+                  <td>{unit.zoneName}</td>
+                  <td>
+                    {unit.kind === "lot"
+                      ? `Manzana ${unit.blockLetter}`
+                      : `${unit.towerName} · ${unit.floorName}`}
+                  </td>
+                  <td>
+                    <span className="badge badge-sm badge-ghost text-[10px]">
+                      {unit.type}
+                    </span>
+                  </td>
+                  <td className="font-semibold">{unit.areaSqm} m²</td>
+                  <td>
+                    <select
+                      className="select select-xs rounded-lg font-medium text-[10px] border border-gray-200 bg-white text-gray-700 focus:outline-none focus:border-brand-orange hover:border-gray-300 transition-colors shadow-2xs"
+                      value={unit.state}
+                      disabled={isPending}
+                      onChange={(e) =>
+                        handleQuickStatusChange(unit, e.target.value as any)
+                      }
+                    >
+                      <option value="AVAILABLE">Disponible</option>
+                      <option value="RESERVED">Reservado</option>
+                      <option value="SOLD">Vendido</option>
+                    </select>
+                  </td>
+                  <td>
+                    {unit.buyerName ? (
+                      <span className="font-medium text-gray-800 flex items-center gap-1">
+                        <UserIcon className="w-3 h-3 text-gray-400" /> {unit.buyerName}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 italic">—</span>
+                    )}
+                  </td>
+                  <td className="text-right">
+                    <button
+                      onClick={() => openDetailModal(unit)}
+                      className="btn btn-ghost btn-xs text-brand-orange hover:bg-orange-100 rounded-lg gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Ficha
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        /* VISTA KANBAN */
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+          {/* Columna Disponibles */}
+          <div className="bg-gray-50/80 p-4 rounded-2xl border border-base-200 flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+              <h3 className="font-bold text-sm text-green-700 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                Disponibles
+              </h3>
+              <span className="badge bg-green-100 text-green-800 border-none font-bold text-xs">
+                {filteredUnits.filter((u) => u.state === "AVAILABLE").length}
+              </span>
+            </div>
 
-      {/* ----------------------------------------------------
-          MODAL: ADD / EDIT FLOOR (SUPER ADMIN ONLY)
-          ---------------------------------------------------- */}
-      {isFloorModalOpen && isSuperAdmin && (
-        <div className="modal modal-open z-50">
-          <div className="modal-box max-w-md bg-white dark:bg-base-100">
-            <button
-              onClick={() => setIsFloorModalOpen(false)}
-              className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <h3 className="font-bold text-lg font-primary text-gray-900 dark:text-white border-b pb-2 mb-4">
-              {floorEditing ? "Editar Planta" : "Añadir Nueva Planta"}
-            </h3>
-
-            <form onSubmit={handleFloorSubmit} className="space-y-4">
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">Nombre de la Planta</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Piso 5, Terraza Principal"
-                  value={floorForm.name}
-                  onChange={(e) => setFloorForm({ ...floorForm, name: e.target.value })}
-                  className="input input-bordered w-full"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Tipo de Planta</span>
-                  </label>
-                  <select
-                    value={floorForm.type}
-                    onChange={(e) => setFloorForm({ ...floorForm, type: e.target.value })}
-                    className="select select-bordered w-full"
+            <div className="flex flex-col gap-3 max-h-[70vh] overflow-y-auto pr-1">
+              {filteredUnits
+                .filter((u) => u.state === "AVAILABLE")
+                .map((unit) => (
+                  <div
+                    key={unit.id}
+                    className="bg-white p-3.5 rounded-xl border border-base-200 shadow-xs hover:shadow-md transition-all flex flex-col gap-2"
                   >
-                    <option value="Planta Baja">Planta Baja</option>
-                    <option value="Piso">Piso</option>
-                    <option value="Terraza">Terraza</option>
-                    <option value="Sótano">Sótano</option>
-                    <option value="Azotea">Azotea</option>
-                  </select>
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Número de Nivel / Piso</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    disabled={floorForm.type !== "Piso"}
-                    value={floorForm.level}
-                    onChange={(e) => setFloorForm({ ...floorForm, level: Number(e.target.value) })}
-                    className="input input-bordered w-full"
-                  />
-                </div>
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-bold text-xs">Ruta Imagen de la Planta</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: images/floor-plans/piso-5.webp"
-                  value={floorForm.imagePath}
-                  onChange={(e) => setFloorForm({ ...floorForm, imagePath: e.target.value })}
-                  className="input input-bordered w-full"
-                />
-              </div>
-
-              <div className="modal-action border-t pt-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsFloorModalOpen(false)}
-                  className="btn btn-ghost"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="btn btn-warning bg-brand-orange text-white"
-                >
-                  {isPending && <span className="loading loading-spinner loading-xs" />}
-                  {floorEditing ? "Guardar Cambios" : "Crear Planta"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ----------------------------------------------------
-          MODAL: CONFIRM DELETE FLOOR
-          ---------------------------------------------------- */}
-      {isDeleteFloorConfirmOpen && floorToDelete && isSuperAdmin && (
-        <div className="modal modal-open z-50">
-          <div className="modal-box bg-white dark:bg-base-100">
-            <h3 className="font-bold text-lg text-error flex items-center gap-2">
-              <AlertTriangle className="w-6 h-6" />
-              ¿Confirmar eliminación de planta?
-            </h3>
-            <p className="py-4 text-gray-600 dark:text-gray-300 text-sm">
-              Estás a punto de eliminar la planta <strong>{floorToDelete.name}</strong>. Esta acción
-              no se puede deshacer y se ejecuta mediante borrado lógico (soft delete).
-            </p>
-
-            {/* Check related units warning */}
-            {units.filter((u) => u.floorId === floorToDelete.id).length > 0 && (
-              <div className="alert alert-warning text-warning bg-warning/10 border-warning/20 text-xs py-2 my-2 rounded-lg">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>
-                  <strong>¡Importante!:</strong> Esta planta contiene{" "}
-                  <strong>
-                    {units.filter((u) => u.floorId === floorToDelete.id).length} unidades
-                  </strong>{" "}
-                  asociadas. Al eliminar la planta, todas estas unidades también se eliminarán del sistema.
-                </span>
-              </div>
-            )}
-
-            <div className="modal-action border-t pt-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDeleteFloorConfirmOpen(false);
-                  setFloorToDelete(null);
-                }}
-                className="btn btn-ghost"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteFloor}
-                disabled={isPending}
-                className="btn btn-error text-white"
-              >
-                {isPending && <span className="loading loading-spinner loading-xs" />}
-                Eliminar Planta y Dependencias
-              </button>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-gray-900 text-sm font-primary">
+                        {unit.code}
+                      </span>
+                      <span className="text-xs font-bold text-brand-orange">
+                        {unit.areaSqm} m²
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{unit.kind === "lot" ? `Mz. ${unit.blockLetter}` : unit.towerName}</span>
+                      <button
+                        onClick={() => openDetailModal(unit)}
+                        className="text-brand-orange hover:underline text-[11px] font-bold"
+                      >
+                        Ver Ficha
+                      </button>
+                    </div>
+                  </div>
+                ))}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ----------------------------------------------------
-          MODAL: ADD / EDIT UNIT (SUPER ADMIN ONLY)
-          ---------------------------------------------------- */}
-      {isUnitModalOpen && isSuperAdmin && (
-        <div className="modal modal-open z-50">
-          <div className="modal-box max-w-xl bg-white dark:bg-base-100 max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setIsUnitModalOpen(false)}
-              className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <h3 className="font-bold text-lg font-primary text-gray-900 dark:text-white border-b pb-2 mb-4">
-              {unitEditing ? `Editar Unidad: ${unitEditing.identifier}` : "Añadir Nueva Unidad"}
-            </h3>
+          {/* Columna Reservados */}
+          <div className="bg-gray-50/80 p-4 rounded-2xl border border-base-200 flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+              <h3 className="font-bold text-sm text-yellow-700 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
+                Reservados
+              </h3>
+              <span className="badge bg-yellow-100 text-yellow-800 border-none font-bold text-xs">
+                {filteredUnits.filter((u) => u.state === "RESERVED").length}
+              </span>
+            </div>
 
-            <form onSubmit={handleUnitSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Identificador / Código</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Apt 501"
-                    value={unitForm.identifier}
-                    onChange={(e) => setUnitForm({ ...unitForm, identifier: e.target.value })}
-                    className="input input-bordered w-full"
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Tipo de Unidad</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Flat, Dúplex, Loft"
-                    value={unitForm.type}
-                    onChange={(e) => setUnitForm({ ...unitForm, type: e.target.value })}
-                    className="input input-bordered w-full"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-4">
-                <div className="form-control col-span-2">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Estado Inicial</span>
-                  </label>
-                  <select
-                    value={unitForm.state}
-                    onChange={(e) => setUnitForm({ ...unitForm, state: e.target.value })}
-                    className="select select-bordered w-full"
+            <div className="flex flex-col gap-3 max-h-[70vh] overflow-y-auto pr-1">
+              {filteredUnits
+                .filter((u) => u.state === "RESERVED")
+                .map((unit) => (
+                  <div
+                    key={unit.id}
+                    className="bg-white p-3.5 rounded-xl border border-base-200 shadow-xs hover:shadow-md transition-all flex flex-col gap-2"
                   >
-                    <option value="AVAILABLE">Disponible</option>
-                    <option value="RESERVED">Apartado</option>
-                    <option value="SOLD">Vendido</option>
-                    {isSuperAdmin && <option value="COMMON_AREA">Área Común</option>}
-                  </select>
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Dormitorios</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={unitForm.bedrooms}
-                    onChange={(e) =>
-                      setUnitForm({ ...unitForm, bedrooms: Number(e.target.value) })
-                    }
-                    className="input input-bordered w-full"
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Baños</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={unitForm.bathrooms}
-                    onChange={(e) =>
-                      setUnitForm({ ...unitForm, bathrooms: Number(e.target.value) })
-                    }
-                    className="input input-bordered w-full"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Área Construida (m²)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={unitForm.areaSqm}
-                    onChange={(e) => setUnitForm({ ...unitForm, areaSqm: Number(e.target.value) })}
-                    className="input input-bordered w-full"
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-bold text-xs">Enlace Recorrido Virtual 3D</span>
-                  </label>
-                  <input
-                    type="url"
-                    placeholder="https://my.matterport.com/show/..."
-                    value={unitForm.tourUrl}
-                    onChange={(e) => setUnitForm({ ...unitForm, tourUrl: e.target.value })}
-                    className="input input-bordered w-full"
-                  />
-                </div>
-              </div>
-
-              {/* Photo lists inputs */}
-              <div className="border-t border-base-200 dark:border-base-300 dark:border-base-200 pt-3 space-y-4">
-                <h4 className="font-bold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-wider">
-                  Galerías de Fotos (Ingresar una URL por línea)
-                </h4>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-semibold text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                      Fotos de Unidad Amoblada
-                    </span>
-                  </label>
-                  <textarea
-                    placeholder="https://images.example.com/furnished1.jpg&#10;https://images.example.com/furnished2.jpg"
-                    value={unitForm.photosFurnishedText}
-                    onChange={(e) =>
-                      setUnitForm({ ...unitForm, photosFurnishedText: e.target.value })
-                    }
-                    rows={2}
-                    className="textarea textarea-bordered font-mono text-xs w-full"
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-semibold text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                      Fotos de Unidad Sin Amoblar
-                    </span>
-                  </label>
-                  <textarea
-                    placeholder="https://images.example.com/empty1.jpg&#10;https://images.example.com/empty2.jpg"
-                    value={unitForm.photosUnfurnishedText}
-                    onChange={(e) =>
-                      setUnitForm({ ...unitForm, photosUnfurnishedText: e.target.value })
-                    }
-                    rows={2}
-                    className="textarea textarea-bordered font-mono text-xs w-full"
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-semibold text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                      Planos / Medidas
-                    </span>
-                  </label>
-                  <textarea
-                    placeholder="https://images.example.com/plan.jpg"
-                    value={unitForm.photosPlansText}
-                    onChange={(e) => setUnitForm({ ...unitForm, photosPlansText: e.target.value })}
-                    rows={2}
-                    className="textarea textarea-bordered font-mono text-xs w-full"
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-semibold text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                      Fotos Vista Balcón
-                    </span>
-                  </label>
-                  <textarea
-                    placeholder="https://images.example.com/balcony.jpg"
-                    value={unitForm.photosBalconyText}
-                    onChange={(e) =>
-                      setUnitForm({ ...unitForm, photosBalconyText: e.target.value })
-                    }
-                    rows={2}
-                    className="textarea textarea-bordered font-mono text-xs w-full"
-                  />
-                </div>
-              </div>
-
-              <div className="modal-action border-t pt-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsUnitModalOpen(false)}
-                  className="btn btn-ghost"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="btn btn-warning bg-brand-orange text-white"
-                >
-                  {isPending && <span className="loading loading-spinner loading-xs" />}
-                  {unitEditing ? "Guardar Cambios" : "Crear Unidad"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ----------------------------------------------------
-          MODAL: CONFIRM DELETE UNIT
-          ---------------------------------------------------- */}
-      {isDeleteUnitConfirmOpen && unitToDelete && isSuperAdmin && (
-        <div className="modal modal-open z-50">
-          <div className="modal-box bg-white dark:bg-base-100">
-            <h3 className="font-bold text-lg text-error flex items-center gap-2">
-              <Trash2 className="w-6 h-6" />
-              ¿Confirmar eliminación de unidad?
-            </h3>
-            <p className="py-4 text-gray-600 dark:text-gray-300 text-sm">
-              ¿Estás seguro de que deseas eliminar la unidad{" "}
-              <strong>{unitToDelete.identifier}</strong>? Se aplicará borrado lógico (soft delete).
-            </p>
-
-            <div className="modal-action border-t pt-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDeleteUnitConfirmOpen(false);
-                  setUnitToDelete(null);
-                }}
-                className="btn btn-ghost"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteUnit}
-                disabled={isPending}
-                className="btn btn-error text-white"
-              >
-                {isPending && <span className="loading loading-spinner loading-xs" />}
-                Confirmar Eliminación
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ----------------------------------------------------
-          MODAL: UNIT DETAILS VIEWER & MEDIA TAB PANEL
-          ---------------------------------------------------- */}
-      {isDetailsModalOpen && selectedUnit && (
-        <div className="modal modal-open z-[60]">
-          <div className="modal-box max-w-4xl bg-white dark:bg-base-100 max-h-[90vh] overflow-y-auto p-6">
-            {/* Header info */}
-            <div className="flex justify-between items-start gap-4 border-b pb-4 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-brand-orange/10 rounded-xl text-brand-orange shrink-0">
-                  <Compass className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-xl font-primary text-gray-900 dark:text-white">
-                    Detalles de Unidad: {selectedUnit.identifier}
-                  </h3>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                    Tipo: {selectedUnit.type || "Flat"} • Planta:{" "}
-                    {floors.find((f) => f.id === selectedUnit.floorId)?.name || "N/A"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => setIsDetailsModalOpen(false)}
-                  className="btn btn-sm btn-circle btn-ghost"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Specs Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-base-200/50 dark:bg-base-300/50 p-3 rounded-lg border text-center">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 block uppercase">Estado</span>
-                <span className={`badge badge-sm border font-bold mt-1 ${getStateColor(selectedUnit.state)}`}>
-                  {getStateLabel(selectedUnit.state)}
-                </span>
-              </div>
-              <div className="bg-base-200/50 dark:bg-base-300/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 block uppercase">Dormitorios</span>
-                <span className="font-bold text-gray-800 dark:text-gray-100 text-sm flex items-center gap-1 mt-0.5">
-                  <Bed className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" /> {selectedUnit.bedrooms || 0}
-                </span>
-              </div>
-              <div className="bg-base-200/50 dark:bg-base-300/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 block uppercase">Baños</span>
-                <span className="font-bold text-gray-800 dark:text-gray-100 text-sm flex items-center gap-1 mt-0.5">
-                  <Bath className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" /> {selectedUnit.bathrooms || 0}
-                </span>
-              </div>
-              <div className="bg-base-200/50 dark:bg-base-300/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 block uppercase">Área Total</span>
-                <span className="font-bold text-gray-800 dark:text-gray-100 text-sm flex items-center gap-1 mt-0.5">
-                  <Maximize className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" /> {selectedUnit.areaSqm || 0} m²
-                </span>
-              </div>
-            </div>
-
-            {/* Media Tabs Header */}
-            <div className="tabs tabs-bordered w-full mb-4">
-              {(isSuperAdmin || selectedUnit.photosFurnished.length > 0) && (
-                <button
-                  onClick={() => setActiveDetailTab("furnished")}
-                  className={`tab ${activeDetailTab === "furnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-                >
-                  Amoblado
-                </button>
-              )}
-              {(isSuperAdmin || selectedUnit.photosUnfurnished.length > 0) && (
-                <button
-                  onClick={() => setActiveDetailTab("unfurnished")}
-                  className={`tab ${activeDetailTab === "unfurnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-                >
-                  Sin Amoblar
-                </button>
-              )}
-              {(isSuperAdmin || selectedUnit.photosPlans.length > 0) && (
-                <button
-                  onClick={() => setActiveDetailTab("plans")}
-                  className={`tab ${activeDetailTab === "plans" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-                >
-                  Planos / Medidas
-                </button>
-              )}
-              {(isSuperAdmin || selectedUnit.photosBalcony.length > 0) && (
-                <button
-                  onClick={() => setActiveDetailTab("balcony")}
-                  className={`tab ${activeDetailTab === "balcony" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-                >
-                  Vista Balcón
-                </button>
-              )}
-              {(isSuperAdmin || selectedUnit.gallery.length > 0) && (
-                <button
-                  onClick={() => setActiveDetailTab("gallery")}
-                  className={`tab ${activeDetailTab === "gallery" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-                >
-                  Galería
-                </button>
-              )}
-              <button
-                onClick={() => setActiveDetailTab("brochure")}
-                className={`tab ${activeDetailTab === "brochure" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
-              >
-                Brochure
-              </button>
-            </div>
-
-            {/* Media Tabs Body */}
-            <div className="bg-base-200 p-4 rounded-xl min-h-[300px] border flex flex-col justify-center items-center">
-              {/* Tab: Furnished */}
-              {activeDetailTab === "furnished" && (
-                <div className="w-full">
-                  {selectedUnit.photosFurnished.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay fotos de la unidad amoblada disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedUnit.photosFurnished.map((url, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
-                          <img src={url} alt={`Amoblado ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-gray-900 text-sm font-primary">
+                        {unit.code}
+                      </span>
+                      <span className="text-xs font-bold text-brand-orange">
+                        {unit.areaSqm} m²
+                      </span>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Unfurnished */}
-              {activeDetailTab === "unfurnished" && (
-                <div className="w-full">
-                  {selectedUnit.photosUnfurnished.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay fotos sin amoblar disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedUnit.photosUnfurnished.map((url, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
-                          <img src={url} alt={`Sin Amoblar ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Plans */}
-              {activeDetailTab === "plans" && (
-                <div className="w-full">
-                  {selectedUnit.photosPlans.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay imágenes de planos o medidas disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-4 max-w-xl mx-auto">
-                      {selectedUnit.photosPlans.map((url, idx) => (
-                        <div key={idx} className="relative aspect-auto rounded-lg overflow-hidden border border-base-300 dark:border-base-200 bg-white dark:bg-base-100 p-2">
-                          <img src={url} alt={`Planos ${idx + 1}`} className="max-h-[400px] mx-auto object-contain" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Balcony */}
-              {activeDetailTab === "balcony" && (
-                <div className="w-full">
-                  {selectedUnit.photosBalcony.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay fotos de la vista del balcón disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedUnit.photosBalcony.map((url, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
-                          <img src={url} alt={`Balcón ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Gallery */}
-              {activeDetailTab === "gallery" && (
-                <div className="w-full">
-                  {selectedUnit.gallery.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay imágenes de galería disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedUnit.gallery.map((url, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
-                          <img src={url} alt={`Galería ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Brochure */}
-              {activeDetailTab === "brochure" && (
-                <div className="w-full flex flex-col justify-center items-center py-6 text-center">
-                  {loadingBrochure ? (
-                    <div className="flex flex-col items-center justify-center py-12">
-                      <span className="loading loading-spinner text-primary loading-md"></span>
-                      <p className="text-sm text-gray-500 mt-2">Cargando brochure...</p>
-                    </div>
-                  ) : !unitBrochureUrl ? (
-                    <div className="text-gray-400 dark:text-gray-500">Brochure digital no configurado para esta unidad.</div>
-                  ) : (
-                    <div className="w-full max-w-3xl flex flex-col gap-4">
-                      <div className="relative w-full h-[500px] rounded-xl overflow-hidden shadow-md border-2 border-base-300 dark:border-base-200 bg-white">
-                        <iframe
-                          src={getAssetUrl(unitBrochureUrl)}
-                          className="w-full h-full border-none"
-                          title="Vista Previa de Brochure"
-                        />
+                    {unit.buyerName && (
+                      <div className="text-[11px] text-gray-700 bg-yellow-50 px-2 py-1 rounded-lg border border-yellow-100">
+                        👤 {unit.buyerName}
                       </div>
-                      <div className="flex flex-wrap justify-center gap-3">
-                        <a
-                          href={getAssetUrl(unitBrochureUrl)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn btn-warning bg-brand-orange hover:bg-brand-dark-orange text-white flex items-center gap-2"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          Abrir Brochure
-                        </a>
-
-                        {/* Copy Link */}
-                        <button
-                          onClick={handleCopyLink}
-                          className="btn btn-outline btn-neutral flex items-center gap-2"
-                        >
-                          {copied ? (
-                            <>
-                              <Check className="w-4 h-4 text-success animate-scale-in" />
-                              Copiado
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-4 h-4" />
-                              Copiar Enlace
-                            </>
-                          )}
-                        </button>
-
-                        {/* WhatsApp sharing */}
-                        <a
-                          href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                            `Hola, te comparto el brochure de la unidad ${selectedUnit.identifier} del Showroom Santa Fe: ${getAbsoluteBrochureUrl(unitBrochureUrl)}`
-                          )}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn btn-success text-white flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 border-0"
-                        >
-                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.966C16.59 1.978 14.12 .953 11.487.953c-5.412 0-9.817 4.358-9.82 9.782-.002 1.742.485 3.442 1.413 4.988l-.947 3.454 3.528-.916c1.558.85 3.111 1.295 4.392 1.295zM17.5 14.39c-.3-.149-1.785-.88-2.062-.98-.277-.101-.479-.149-.68.151-.2.299-.777.98-.952 1.18-.175.2-.35.226-.65.076-.3-.15-1.267-.467-2.414-1.491-.892-.796-1.494-1.78-1.67-2.079-.175-.3-.019-.462.13-.61.135-.133.3-.35.45-.526.15-.175.2-.299.3-.5.1-.2.05-.375-.025-.526-.075-.15-.68-1.637-.932-2.247-.247-.591-.497-.511-.68-.521-.176-.01-.377-.01-.577-.01-.2 0-.527.075-.803.375-.276.3-.1.526-.1.803 0 .278.101.526.2.777.302.277 3.51 5.39 8.52 7.56 1.192.516 2.124.825 2.85 1.055 1.197.38 2.286.326 3.148.196.961-.146 1.785-.726 2.062-1.39.277-.665.277-1.232.193-1.39-.084-.158-.299-.247-.599-.397z"/>
-                          </svg>
-                          WhatsApp
-                        </a>
-
-                        {/* Email sharing */}
-                        <a
-                          href={`mailto:?subject=${encodeURIComponent(
-                            `Brochure de la unidad ${selectedUnit.identifier} - Showroom Santa Fe`
-                          )}&body=${encodeURIComponent(
-                            `Hola,\n\nTe comparto el brochure de la unidad ${selectedUnit.identifier} del Showroom Santa Fe:\n\n${getAbsoluteBrochureUrl(unitBrochureUrl)}\n\nSaludos!`
-                          )}`}
-                          className="btn btn-outline btn-neutral flex items-center gap-2"
-                        >
-                          <Mail className="w-4 h-4" />
-                          Correo
-                        </a>
-                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{unit.kind === "lot" ? `Mz. ${unit.blockLetter}` : unit.towerName}</span>
+                      <button
+                        onClick={() => openDetailModal(unit)}
+                        className="text-brand-orange hover:underline text-[11px] font-bold"
+                      >
+                        Ver Ficha
+                      </button>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          {/* Columna Vendidos */}
+          <div className="bg-gray-50/80 p-4 rounded-2xl border border-base-200 flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+              <h3 className="font-bold text-sm text-red-700 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                Vendidos
+              </h3>
+              <span className="badge bg-red-100 text-red-800 border-none font-bold text-xs">
+                {filteredUnits.filter((u) => u.state === "SOLD").length}
+              </span>
             </div>
 
-            {/* Change State dropdown & Super Admin Edit option inside details modal */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-t pt-4 mt-6 gap-4">
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase">Cambiar Estado:</span>
-                <select
-                  value={selectedUnit.state}
-                  onChange={(e) => handleStatusChange(selectedUnit.id, e.target.value)}
-                  className="select select-bordered select-sm text-gray-800 dark:text-gray-100"
-                >
-                  <option value="AVAILABLE">Disponible</option>
-                  <option value="RESERVED">Apartado</option>
-                  <option value="SOLD">Vendido</option>
-                  {isSuperAdmin && <option value="COMMON_AREA">Área Común</option>}
-                </select>
-              </div>
-
-              <div className="flex gap-2 w-full sm:w-auto justify-end">
-                {isSuperAdmin && (
-                  <button
-                    onClick={(e) => {
-                      setIsDetailsModalOpen(false);
-                      openEditUnitModal(selectedUnit, e);
-                    }}
-                    className="btn btn-sm btn-outline border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
+            <div className="flex flex-col gap-3 max-h-[70vh] overflow-y-auto pr-1">
+              {filteredUnits
+                .filter((u) => u.state === "SOLD")
+                .map((unit) => (
+                  <div
+                    key={unit.id}
+                    className="bg-white p-3.5 rounded-xl border border-base-200 shadow-xs hover:shadow-md transition-all flex flex-col gap-2"
                   >
-                    <Edit className="w-3.5 h-3.5 mr-1" />
-                    Editar Información
-                  </button>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-gray-900 text-sm font-primary">
+                        {unit.code}
+                      </span>
+                      <span className="text-xs font-bold text-brand-orange">
+                        {unit.areaSqm} m²
+                      </span>
+                    </div>
+                    {unit.buyerName && (
+                      <div className="text-[11px] text-gray-700 bg-red-50 px-2 py-1 rounded-lg border border-red-100">
+                        👤 {unit.buyerName}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{unit.kind === "lot" ? `Mz. ${unit.blockLetter}` : unit.towerName}</span>
+                      <button
+                        onClick={() => openDetailModal(unit)}
+                        className="text-brand-orange hover:underline text-[11px] font-bold"
+                      >
+                        Ver Ficha
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE DETALLE Y EDICIÓN DE UNIDAD */}
+      {selectedUnit && (
+        <dialog open className="modal modal-open">
+          <div className="modal-box p-6 bg-white rounded-3xl max-w-2xl w-full font-secondary shadow-2xl border border-gray-100">
+            <button
+              onClick={closeDetailModal}
+              className="btn btn-sm btn-circle btn-ghost absolute right-5 top-5"
+            >
+              ✕
+            </button>
+
+            <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+              <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-brand-orange shrink-0">
+                {selectedUnit.kind === "lot" ? <MapPin className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
+              </div>
+              <div>
+                <h3 className="font-bold text-xl font-primary text-gray-900">
+                  {selectedUnit.code}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {selectedUnit.zoneName} · {selectedUnit.type}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveModal} className="flex flex-col gap-5 mt-5">
+              {/* Imagen y Planos */}
+              <div className="aspect-video bg-base-100 rounded-2xl overflow-hidden relative border border-gray-200">
+                <img
+                  src={
+                    selectedUnit.kind === "lot"
+                      ? selectedUnit.planImageMeasured || selectedUnit.planImage || ""
+                      : selectedUnit.gallery?.[0] || ""
+                  }
+                  alt={selectedUnit.code}
+                  className="w-full h-full object-cover"
+                />
+                {selectedUnit.tourUrl && (
+                  <a
+                    href={selectedUnit.tourUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute bottom-3 right-3 btn btn-xs bg-white/90 hover:bg-white text-gray-900 rounded-xl shadow-md border-0 gap-1 backdrop-blur-xs font-bold"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-brand-orange" /> Tour 360°
+                  </a>
                 )}
-                <button onClick={() => setIsDetailsModalOpen(false)} className="btn btn-sm btn-ghost">
-                  Cerrar
+              </div>
+
+              {/* Especificaciones */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-gray-400">Área</span>
+                  <div className="font-bold text-gray-800 text-sm">{selectedUnit.areaSqm} m²</div>
+                </div>
+                {selectedUnit.kind === "lot" ? (
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-gray-400">Posición</span>
+                    <div className="font-bold text-gray-800 text-sm">
+                      {selectedUnit.lotPosition || "Medianera"}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-gray-400">Dormitorios</span>
+                      <div className="font-bold text-gray-800 text-sm">3 Dormitorios</div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-gray-400">Baños</span>
+                      <div className="font-bold text-gray-800 text-sm">1 Baño</div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Formulario de Estado y Comprador */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="form-control">
+                  <label className="label py-1">
+                    <span className="label-text font-bold text-xs text-gray-700">Estado Comercial</span>
+                  </label>
+                  <select
+                    className="select select-bordered w-full text-sm bg-base-50 rounded-xl font-medium"
+                    value={modalState}
+                    onChange={(e) => setModalState(e.target.value as any)}
+                  >
+                    <option value="AVAILABLE">🟢 Disponible</option>
+                    <option value="RESERVED">🟡 Reservado</option>
+                    <option value="SOLD">🔴 Vendido</option>
+                  </select>
+                </div>
+
+                <div className="form-control">
+                  <label className="label py-1">
+                    <span className="label-text font-bold text-xs text-gray-700">
+                      Nombre del Comprador / Propietario
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Juan Pérez"
+                    className="input input-bordered w-full text-sm bg-base-50 rounded-xl"
+                    value={modalBuyerName}
+                    onChange={(e) => setModalBuyerName(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Botones de acción */}
+              <div className="modal-action mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={closeDetailModal}
+                  className="btn btn-ghost rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="btn bg-brand-orange hover:bg-brand-dark-orange text-white border-0 rounded-xl px-6 font-bold shadow-md"
+                >
+                  {isSaving ? "Guardando..." : "Guardar Cambios"}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
-        </div>
+          <form method="dialog" className="modal-backdrop">
+            <button onClick={closeDetailModal}>close</button>
+          </form>
+        </dialog>
       )}
     </div>
   );

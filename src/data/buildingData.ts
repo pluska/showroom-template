@@ -30,69 +30,92 @@ import { getAssetUrl } from '../utils/assets';
 export const buildingFaces: BuildingFace[] = [
   {
     id: 0,
-    name: 'Cara Central',
-    dayToNightTransition: getAssetUrl('building/transitions/trans_0_day_to_night.mp4'),
-    nightToDayTransition: getAssetUrl('building/transitions/trans_0_night_to_day.mp4'),
+    name: 'Cara Inicial',
+    dayToNightTransition: '',
+    nightToDayTransition: '',
     day: {
-      background: getAssetUrl('building/photos/face_0_daylight.png'),
-      backgroundVideo: getAssetUrl('building/videos/face_0_daylight.mp4'),
-      introVideo: getAssetUrl('videos/walks/walk_center_daylight.mp4'),
+      background: getAssetUrl('building/photos/0.1.webp'),
+      backgroundVideo: getAssetUrl('building/videos/0.1.mp4'),
+      introVideo: getAssetUrl('building/transitions/0.1_a_1.1.mp4'),
       transitions: {
-        toLeft: getAssetUrl('building/transitions/trans_0_to_2_daylight.mp4'),
-        toRight: getAssetUrl('building/transitions/trans_0_to_1_daylight.mp4')
+        toLeft: '',
+        toRight: ''
       }
     },
     night: {
-      background: getAssetUrl('building/photos/face_0_nightlight.png'),
-      introVideo: getAssetUrl('videos/walks/walk_center_nightlight.mp4'),
+      background: getAssetUrl('building/photos/0.1.webp'),
+      backgroundVideo: getAssetUrl('building/videos/0.1.mp4'),
+      introVideo: getAssetUrl('building/transitions/0.1_a_1.1.mp4'),
       transitions: {
-        toLeft: getAssetUrl('building/transitions/trans_0_to_2_nightlight.mp4'),
-        toRight: getAssetUrl('building/transitions/trans_0_to_1_nightlight.mp4')
+        toLeft: '',
+        toRight: ''
       }
     }
   },
   {
     id: 1,
-    name: 'Cara Derecha',
-    dayToNightTransition: getAssetUrl('building/transitions/trans_1_day_to_night.mp4'),
-    nightToDayTransition: getAssetUrl('building/transitions/trans_1_night_to_day.mp4'),
+    name: 'Cara Izquierda',
+    dayToNightTransition: getAssetUrl('building/transitions/2.1_a_2.2.mp4'),
+    nightToDayTransition: getAssetUrl('building/transitions/2.2_a_2.1.mp4'),
     day: {
-      background: getAssetUrl('building/photos/face_1_daylight.png'),
-      introVideo: getAssetUrl('videos/walks/walk_right_daylight.mp4'),
+      background: getAssetUrl('building/photos/2.1.webp'),
+      introVideo: getAssetUrl('building/transitions/2.1_a_PISO_6.mp4'),
       transitions: {
-        toLeft: getAssetUrl('building/transitions/trans_1_to_0_daylight.mp4'),
-        toRight: getAssetUrl('building/transitions/trans_1_to_0_daylight.mp4') // Fallback as no 1->2 transition provided
+        toLeft: '',
+        toRight: getAssetUrl('building/transitions/2.1_a_1.1.mp4')
       }
     },
     night: {
-      background: getAssetUrl('building/photos/face_1_nightlight.png'),
-      introVideo: getAssetUrl('videos/walks/walk_right_nightlight.mp4'),
+      background: getAssetUrl('building/photos/2.2.2.webp'),
+      introVideo: getAssetUrl('building/transitions/2.2_a_PISO_6.mp4'),
       transitions: {
-        toLeft: getAssetUrl('building/transitions/trans_1_to_0_nightlight.mp4'),
-        toRight: getAssetUrl('building/transitions/trans_1_to_0_nightlight.mp4') // Fallback as no 1->2 transition provided
+        toLeft: '',
+        toRight: getAssetUrl('building/transitions/2.2_a_1.2.mp4')
       }
     }
   },
   {
     id: 2,
-    name: 'Cara Izquierda',
-    dayToNightTransition: getAssetUrl('building/transitions/trans_2_day_to_night.mp4'),
-    nightToDayTransition: getAssetUrl('building/transitions/trans_2_night_to_day.mp4'),
+    name: 'Cara Central',
+    dayToNightTransition: getAssetUrl('building/transitions/1.1_a_1.2.mp4'),
+    nightToDayTransition: getAssetUrl('building/transitions/1.2_a_1.1.mp4'),
     day: {
-      background: getAssetUrl('building/photos/face_2_daylight.png'),
-      introVideo: getAssetUrl('videos/walks/walk_left_daylight.mp4'),
+      background: getAssetUrl('building/photos/1.1.webp'),
+      introVideo: getAssetUrl('building/transitions/1.1_a_PISO_6.mp4'),
       transitions: {
-        toLeft: getAssetUrl('building/transitions/trans_2_to_0_daylight.mp4'), // Fallback as no 2->1 transition provided
-        toRight: getAssetUrl('building/transitions/trans_2_to_0_daylight.mp4')
+        toLeft: getAssetUrl('building/transitions/1.1_a_2.1.mp4'),
+        toRight: getAssetUrl('building/transitions/1.1_a_3.1.mp4')
       }
     },
     night: {
-      background: getAssetUrl('building/photos/face_2_nightlight.png'),
-      introVideo: getAssetUrl('videos/walks/walk_left_nightlight.mp4'),
+      background: getAssetUrl('building/photos/1.2.webp'),
+      introVideo: getAssetUrl('building/transitions/1.2_a_PISO_6.mp4'),
       transitions: {
-        toLeft: getAssetUrl('building/transitions/trans_2_to_0_nightlight.mp4'), // Fallback as no 2->1 transition provided
-        toRight: getAssetUrl('building/transitions/trans_2_to_0_nightlight.mp4')
+        toLeft: getAssetUrl('building/transitions/1.2_A_2.2.mp4'),
+        toRight: getAssetUrl('building/transitions/1.2_a_3.2.mp4')
       }
     }
   },
+  {
+    id: 3,
+    name: 'Cara Derecha',
+    dayToNightTransition: getAssetUrl('building/transitions/3.1_a_3.2.mp4'),
+    nightToDayTransition: getAssetUrl('building/transitions/3.2_a_3.1.mp4'),
+    day: {
+      background: getAssetUrl('building/photos/3.1.webp'),
+      introVideo: getAssetUrl('building/transitions/3.1_a_PISO_6.mp4'),
+      transitions: {
+        toLeft: getAssetUrl('building/transitions/3.1_a_1.1.mp4'),
+        toRight: ''
+      }
+    },
+    night: {
+      background: getAssetUrl('building/photos/3.2.webp'),
+      introVideo: getAssetUrl('building/transitions/3.2_a_PISO_6.mp4'),
+      transitions: {
+        toLeft: getAssetUrl('building/transitions/3.2_a_1.2.mp4'),
+        toRight: ''
+      }
+    }
+  }
 ];

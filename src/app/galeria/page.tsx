@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from '@/components/layout/Sidebar';
+import ImageComparisonSlider from '@/components/UI/ImageComparisonSlider';
 import { type GalleryImage } from '@/data/galleries';
 import { assetManifest, getAssetUrl } from '@/utils/assets';
 import FullScreenToggle from '@/components/UI/FullScreenToggle';
@@ -44,6 +45,7 @@ const GalleryPage = () => {
         const dbImages: GalleryImage[] = dbMedia.map(m => ({
           id: m.id,
           src: getAssetUrl(m.url),
+          srcNight: m.urlNight ? getAssetUrl(m.urlNight) : undefined,
           alt: m.title,
           title: m.title
         }));
@@ -60,21 +62,68 @@ const GalleryPage = () => {
           }
           
           if (folderPrefix) {
-            const matchingAssets = assetManifest.filter(path => path.startsWith(folderPrefix));
-            const images: GalleryImage[] = matchingAssets.map(path => {
-              const filename = path.split('/').pop() || path;
-              const name = filename.split('.')[0].replace(/_/g, ' ').replace(/-/g, ' ');
-              let title = name.charAt(0).toUpperCase() + name.slice(1);
-              if (/^\d+$/.test(title)) title = `Amenity ${title}`;
-              
-              return {
-                id: path,
-                src: getAssetUrl(path),
-                alt: title,
-                title: title
-              };
-            });
-            setDynamicImages(images);
+            if (activeTabId === 'amenities') {
+              // Special logic for amenities: support day and night image sets
+              const dayAssets = assetManifest.filter(path => path.startsWith(folderPrefix) && path.includes('_day'));
+              const processed = new Set<string>();
+              const sliderImages: GalleryImage[] = [];
+
+              dayAssets.forEach(dayPath => {
+                const baseName = dayPath.replace('_day.png', '').replace('_day.jpg', '').replace('_day.jpeg', '');
+                const extension = dayPath.split('.').pop();
+                const nightPath = `${baseName}_night.${extension}`;
+                const hasNight = assetManifest.includes(nightPath);
+
+                processed.add(dayPath);
+                if (hasNight) processed.add(nightPath);
+
+                const filename = dayPath.split('/').pop() || dayPath;
+                const numberPart = filename.split('_')[0];
+                const title = `Amenidad ${numberPart}`;
+
+                sliderImages.push({
+                  id: dayPath,
+                  src: getAssetUrl(dayPath),
+                  srcNight: hasNight ? getAssetUrl(nightPath) : undefined,
+                  alt: title,
+                  title: title
+                });
+              });
+
+              // Process any other items in amenities directory that are not part of day/night sets
+              const otherAssets = assetManifest.filter(path => path.startsWith(folderPrefix) && !processed.has(path));
+              otherAssets.forEach(path => {
+                const filename = path.split('/').pop() || path;
+                const name = filename.split('.')[0].replace(/_/g, ' ').replace(/-/g, ' ');
+                let title = name.charAt(0).toUpperCase() + name.slice(1);
+                if (/^\d+$/.test(title)) title = `Amenidad ${title}`;
+
+                sliderImages.push({
+                  id: path,
+                  src: getAssetUrl(path),
+                  alt: title,
+                  title: title
+                });
+              });
+
+              setDynamicImages(sliderImages);
+            } else {
+              const matchingAssets = assetManifest.filter(path => path.startsWith(folderPrefix));
+              const images: GalleryImage[] = matchingAssets.map(path => {
+                const filename = path.split('/').pop() || path;
+                const name = filename.split('.')[0].replace(/_/g, ' ').replace(/-/g, ' ');
+                let title = name.charAt(0).toUpperCase() + name.slice(1);
+                if (/^\d+$/.test(title)) title = `Amenity ${title}`;
+                
+                return {
+                  id: path,
+                  src: getAssetUrl(path),
+                  alt: title,
+                  title: title
+                };
+              });
+              setDynamicImages(images);
+            }
           } else {
             // General fallback: if no folder prefix, look for any image in asset manifest starting with 'gallery/' as generic
             const matchingAssets = assetManifest.filter(path => path.startsWith('gallery/'));
@@ -110,7 +159,23 @@ const GalleryPage = () => {
     const count = displayImages.length;
     const nextIndex = (currentIndex + 1) % count;
     const prevIndex = (currentIndex - 1 + count) % count;
-    preloadImages([displayImages[nextIndex].src, displayImages[prevIndex].src]).catch(() => {});
+    
+    const assetsToPreload = [
+      displayImages[nextIndex].src, 
+      displayImages[prevIndex].src
+    ];
+    
+    if (displayImages[currentIndex].srcNight) {
+      assetsToPreload.push(displayImages[currentIndex].srcNight);
+    }
+    if (displayImages[nextIndex].srcNight) {
+      assetsToPreload.push(displayImages[nextIndex].srcNight);
+    }
+    if (displayImages[prevIndex].srcNight) {
+      assetsToPreload.push(displayImages[prevIndex].srcNight);
+    }
+    
+    preloadImages(assetsToPreload).catch(() => {});
   }, [currentIndex, displayImages]);
 
   // 4. Navigation Handlers
@@ -187,15 +252,27 @@ const GalleryPage = () => {
                      <ChevronLeft size={24} />
                  </button>
 
-                 {/* Image */}
-                 <div className="w-full h-full p-0 flex items-center justify-center">
-                    <img 
-                        key={currentImage.src}
-                        src={currentImage.src} 
-                        alt={currentImage.alt} 
-                        className="w-full h-full object-contain" 
-                    />
-                 </div>
+                  {/* Image / Comparison Slider */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                     {currentImage.srcNight ? (
+                       <div className="w-full h-full">
+                         <ImageComparisonSlider
+                           key={currentImage.id}
+                           dayImage={currentImage.src}
+                           nightImage={currentImage.srcNight}
+                           alt={currentImage.title || currentImage.alt}
+                           fullBleed
+                         />
+                       </div>
+                     ) : (
+                       <img 
+                           key={currentImage.src}
+                           src={currentImage.src} 
+                           alt={currentImage.alt} 
+                           className="w-full h-full object-contain" 
+                       />
+                     )}
+                  </div>
 
                  {/* Next Arrow */}
                  <button 
@@ -205,8 +282,10 @@ const GalleryPage = () => {
                      <ChevronRight size={24} />
                  </button>
 
-                 {/* Counter/Index */}
-                 <div className="absolute bottom-6 right-6 z-20 pointer-events-none">
+                 {/* Counter/Index — centered rather than bottom-right: now that the
+                     comparison slider runs edge-to-edge, its "Noche" corner label
+                     occupies that corner. */}
+                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
                      <div className="text-xs font-medium bg-black/30 text-white px-3 py-1 rounded-full backdrop-blur-md border border-white/10">
                         {currentIndex + 1} / {displayImages.length}
                      </div>

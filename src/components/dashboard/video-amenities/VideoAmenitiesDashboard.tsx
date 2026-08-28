@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Upload, Video, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Plus, Trash2, Upload, Video, Image as ImageIcon, Loader2, Check, AlertTriangle } from "lucide-react";
 import { uploadMedia, toggleMediaActive, deleteMedia } from "@/app/actions/media";
 
 type MediaItem = {
@@ -27,6 +27,12 @@ export default function VideoAmenitiesDashboard({ initialMedia }: VideoAmenities
   
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   const filteredMedia = mediaList.filter(m => m.category === activeTab);
 
@@ -101,7 +107,7 @@ export default function VideoAmenitiesDashboard({ initialMedia }: VideoAmenities
         })
       );
     } catch (e: any) {
-      alert(e.message || "Error al cambiar estado");
+      showNotification("error", e.message || "Error al cambiar estado");
     }
   };
 
@@ -112,12 +118,22 @@ export default function VideoAmenitiesDashboard({ initialMedia }: VideoAmenities
       await deleteMedia(id);
       setMediaList((prev) => prev.filter((m) => m.id !== id));
     } catch (e: any) {
-      alert(e.message || "Error al eliminar");
+      showNotification("error", e.message || "Error al eliminar");
     }
   };
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-6xl mx-auto animate-fade-in pb-12">
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <Check className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="border-b pb-5 border-base-300">
         <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">

@@ -7,8 +7,10 @@ import FullScreenToggle from '@/components/UI/FullScreenToggle';
 import config from '@/config/config';
 import Adviser from '@/components/Adviser';
 import { advisersData } from '@/data/advisers';
-import { createAppointment } from '@/app/actions/calendar';
-import { getUnits } from '@/app/actions/units';
+import { homepageData } from '@/data/homepage';
+import { getUnits, getFloors } from '@/app/actions/units';
+import { getBookingEnabled } from '@/app/actions/booking';
+import { createProspectAction } from '@/app/actions/calendar';
 
 const TikTokIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
     <svg 
@@ -31,6 +33,12 @@ const Contact = () => {
   const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
   const [tempTime, setTempTime] = useState({ hour: '09', minute: '00', period: 'AM' });
   const [activeSection, setActiveSection] = useState<'form' | 'advisers' | 'booking'>('form');
+  // El agendamiento de citas se activa desde el módulo Calendario del panel.
+  // Mientras esté apagado, el botón no se muestra y la sección es inalcanzable.
+  const [bookingEnabled, setBookingEnabled] = useState(false);
+  // La sección de canales de venta sólo existe si hay alguno cargado.
+  // Ver src/data/advisers.ts.
+  const advisersEnabled = advisersData.length > 0;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -92,15 +100,61 @@ const Contact = () => {
   const [bookingUnits, setBookingUnits] = useState<string[]>([]);
   const [bookingMeetingType, setBookingMeetingType] = useState<'VIRTUAL' | 'IN_PERSON'>('VIRTUAL');
 
-  // Load Units List
+  // Load Units List (only sellable apartments — exclude storage/deposits and common areas).
+  // Each unit is enriched with a human-readable detail: floor, bedrooms and area.
   useEffect(() => {
-    getUnits().then(data => setUnitsList(data.filter((u: any) => u.state !== 'COMMON_AREA'))).catch(err => console.error("Error loading units:", err));
+    Promise.all([getUnits(), getFloors()])
+      .then(([unitsData, floorsData]: [any[], any[]]) => {
+        const floorMap = new Map<string, any>();
+        floorsData.forEach((f) => floorMap.set(f.id, f));
+
+        const sellable = unitsData.filter(
+          (u: any) => u.type !== 'STORAGE' && u.type !== 'COMMON_AREA' && u.state !== 'COMMON_AREA'
+        );
+
+        // There is no subcategory field: a duplex is a unit whose identifier
+        // spans more than one floor (same identifier on multiple floors).
+        const identifierCounts = new Map<string, number>();
+        sellable.forEach((u: any) => identifierCounts.set(u.identifier, (identifierCounts.get(u.identifier) || 0) + 1));
+
+        const filtered = sellable
+          .filter((u: any) => u.state !== 'SOLD')
+          .map((u: any) => {
+            const floor = floorMap.get(u.floorId);
+            const floorLabel = floor ? `${floor.type || 'Piso'} ${floor.name}` : '';
+            const category = (identifierCounts.get(u.identifier) || 0) > 1 ? 'Dúplex' : 'Flat';
+            const parts: string[] = [];
+            if (floorLabel) parts.push(floorLabel);
+            if (u.bedrooms) parts.push(`${u.bedrooms} ${u.bedrooms === 1 ? 'dorm.' : 'dorms.'}`);
+            if (u.areaSqm) parts.push(`${u.areaSqm} m²`);
+            return { ...u, category, detail: parts.join(' · ') };
+          });
+
+        // Consolidate duplexes so that each identifier appears only once in the list
+        const uniqueFiltered: any[] = [];
+        const seenIdentifiers = new Set<string>();
+        filtered.forEach((u: any) => {
+          if (!seenIdentifiers.has(u.identifier)) {
+            seenIdentifiers.add(u.identifier);
+            uniqueFiltered.push(u);
+          }
+        });
+
+        setUnitsList(uniqueFiltered);
+      })
+      .catch(err => console.error("Error loading units:", err));
   }, []);
 
-  // Fetch Available Days when month/year changes
+  useEffect(() => {
+    getBookingEnabled()
+      .then(setBookingEnabled)
+      .catch((err) => console.error('Error leyendo el estado de citas:', err));
+  }, []);
+
+  // Fetch Available Days when month/year/meeting type changes
   useEffect(() => {
     if (activeSection === 'booking') {
-      fetch(`/api/calendar/availability?year=${bookingYear}&month=${bookingMonth + 1}`)
+      fetch(`/api/calendar/availability?year=${bookingYear}&month=${bookingMonth + 1}&type=${bookingMeetingType}`)
         .then(res => res.json())
         .then((data: any) => {
           if (data.days) {
@@ -109,18 +163,18 @@ const Contact = () => {
         })
         .catch(err => console.error("Error fetching available days:", err));
     }
-  }, [bookingYear, bookingMonth, activeSection]);
+  }, [bookingYear, bookingMonth, activeSection, bookingMeetingType]);
 
   // Fetch Available Hours when day selected
   const handleSelectDay = (day: number) => {
     const monthStr = String(bookingMonth + 1).padStart(2, '0');
     const dayStr = String(day).padStart(2, '0');
     const dateFormatted = `${bookingYear}-${monthStr}-${dayStr}`;
-    
+
     setSelectedBookingDate(dateFormatted);
     setSelectedBookingHour('');
 
-    fetch(`/api/calendar/availability?date=${dateFormatted}`)
+    fetch(`/api/calendar/availability?date=${dateFormatted}&type=${bookingMeetingType}`)
       .then(res => res.json())
       .then((data: any) => {
         if (data.hours) {
@@ -128,6 +182,15 @@ const Contact = () => {
         }
       })
       .catch(err => console.error("Error fetching hours:", err));
+  };
+
+  // Changing the meeting type changes which advisers are available,
+  // so reset any day/hour the user had picked under the previous type.
+  const handleChangeMeetingType = (type: 'VIRTUAL' | 'IN_PERSON') => {
+    setBookingMeetingType(type);
+    setSelectedBookingDate('');
+    setAvailableHours([]);
+    setSelectedBookingHour('');
   };
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
@@ -143,24 +206,39 @@ const Contact = () => {
     }
 
     const [hours, minutes] = selectedBookingHour.split(':');
-    const finalDate = new Date(selectedBookingDate + 'T00:00:00');
-    finalDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    const finalDate = `${selectedBookingDate}T${hours}:${minutes}:00-05:00`;
 
     setIsSubmitting(true);
     startTransition(async () => {
       try {
-        await createAppointment({
-          date: finalDate,
-          type: bookingMeetingType,
-          prospectName: bookingName,
-          prospectEmail: bookingEmail,
-          prospectPhone: bookingPhone || undefined,
-          prospectAddress: bookingAddress || undefined,
-          unitsOfInterest: bookingUnits,
-          sendEmail: true,
+        const response = await fetch('/api/calendar/appointment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: finalDate,
+            type: bookingMeetingType,
+            prospectName: bookingName,
+            prospectEmail: bookingEmail,
+            prospectPhone: bookingPhone || undefined,
+            prospectAddress: bookingAddress || undefined,
+            unitsOfInterest: bookingUnits,
+            sendEmail: true,
+          })
         });
 
-        const dateFormatted = new Date(selectedBookingDate + 'T00:00:00').toLocaleDateString('es-ES', {
+        if (!response.ok) {
+          const errData = await response.json() as { error?: string };
+          throw new Error(errData.error || "Error al crear la cita");
+        }
+
+        const result = await response.json() as { success: boolean; error?: string };
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        const dateFormatted = new Date(selectedBookingDate + 'T00:00:00-05:00').toLocaleDateString('es-ES', {
+          timeZone: 'America/Lima',
           weekday: 'long',
           day: 'numeric',
           month: 'long',
@@ -330,17 +408,51 @@ const Contact = () => {
         setIsSubmitting(true);
         const fullPayload = {
             ...formData,
+            nombreCompleto: `${formData.nombres} ${formData.apellido}`,
+            proyecto: config.company?.buildingName || config.appName,
             horario: `${formData.horarioHora}:${formData.horarioMinuto} ${formData.horarioPeriodo || 'AM'}`
         };
         
         try {
-            const response = await fetch('/api/send-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fullPayload)
-            });
+            // 1. Guardar prospecto en la base de datos D1
+            try {
+                await createProspectAction({
+                    name: `${formData.nombres} ${formData.apellido}`,
+                    email: formData.email,
+                    phone: formData.celular,
+                    address: formData.mensaje || undefined
+                });
+            } catch (pErr) {
+                console.error("Error guardando prospecto:", pErr);
+            }
 
-            if (response.ok) {
+            // 2. Enviar correo vía PHP Mailer (config.mailerUrl) o API
+            let emailSent = false;
+
+            if (config.mailerUrl) {
+                try {
+                    const mailerRes = await fetch(config.mailerUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(fullPayload)
+                    });
+                    if (mailerRes.ok) emailSent = true;
+                } catch (mErr) {
+                    console.warn("Fallo temporal en mailer PHP, intentando ruta interna:", mErr);
+                }
+            }
+
+            // Fallback al endpoint Next.js si no se envió por mailerUrl
+            if (!emailSent) {
+                const response = await fetch('/api/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(fullPayload)
+                });
+                if (response.ok) emailSent = true;
+            }
+
+            if (emailSent) {
                 setModalState({
                   isOpen: true,
                   type: 'success',
@@ -354,7 +466,7 @@ const Contact = () => {
                     documentNumber: '',
                     celular: '',
                     email: '',
-                    project: config.company?.buildingName || 'Project Name',
+                    project: config.company?.buildingName || 'Urbanización El Olimpo de Tumbes',
                     contactPreference: '',
                     horarioHora: '',
                     horarioMinuto: '',
@@ -364,12 +476,11 @@ const Contact = () => {
                     mensaje: ''
                 });
             } else {
-                const data = await response.json() as { error?: string };
                 setModalState({
                   isOpen: true,
                   type: 'error',
                   title: 'Error de Envío',
-                  message: `Hubo un error al enviar el mensaje: ${data.error || 'Intente nuevamente.'}`
+                  message: 'Hubo un inconveniente al procesar tu solicitud. Por favor, intenta de nuevo o comunícate vía WhatsApp.'
                 });
             }
         } catch (error) {
@@ -412,28 +523,21 @@ const Contact = () => {
            <FullScreenToggle />
       </div>
 
-      {/* Background Video — a blurred, scaled-up copy fills the frame (no black
-          bars) while the sharp centered copy stays object-contain so it's
-          never harshly cropped. */}
-      <div className="absolute inset-0 z-0 bg-black overflow-hidden">
+      {/* Background Video — fills the strip the form panel leaves free, edge to
+          edge. object-contain across the whole viewport (the template default)
+          only looks right on very wide windows: on a 16:9 one it letterboxes
+          and the panel hides ~45% of the frame. Shares the homepage cover video
+          so both ambients stay in sync from a single definition. */}
+      <div className="absolute inset-y-0 left-0 right-0 md:right-[600px] lg:right-[650px] z-0 bg-black overflow-hidden">
         <video
           autoPlay
           loop
           muted
           playsInline
-          className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-60"
+          poster={getAssetUrl(homepageData.intro.poster)}
+          className="w-full h-full object-cover"
         >
-          <source src={getAssetUrl('videos/walk.mp4')} type="video/mp4" />
-        </video>
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="relative w-full h-full object-contain"
-          style={{ objectPosition: '0' }}
-        >
-          <source src={getAssetUrl('videos/walk.mp4')} type="video/mp4" />
+          <source src={getAssetUrl(homepageData.intro.video)} type="video/mp4" />
         </video>
       </div>
 
@@ -788,33 +892,61 @@ const Contact = () => {
                           {isSubmitting ? 'Enviando...' : 'Enviar respuesta'}
                       </button>
 
-                      <button 
-                          type="button"
-                          onClick={() => setActiveSection('booking')}
-                          className="w-full bg-brand-orange hover:bg-brand-orange/90 text-white font-secondary font-bold text-xs uppercase tracking-widest py-4 rounded-full transition-all shadow-lg flex items-center justify-center gap-2"
-                      >
-                          <CalendarIcon size={14} /> Fija una cita con nosotros
-                      </button>
+                      {bookingEnabled && (
+                        <button
+                            type="button"
+                            onClick={() => setActiveSection('booking')}
+                            className="w-full bg-brand-orange hover:bg-brand-orange/90 text-white font-secondary font-bold text-xs uppercase tracking-widest py-4 rounded-full transition-all shadow-lg flex items-center justify-center gap-2"
+                        >
+                            <CalendarIcon size={14} /> Fija una cita con nosotros
+                        </button>
+                      )}
 
-                      <button 
-                          type="button"
-                          onClick={() => setActiveSection('advisers')}
-                          className="w-full bg-white border border-gray-100 text-gray-800 font-secondary font-bold text-xs uppercase tracking-widest py-4 rounded-full transition-all hover:bg-gray-50 shadow-sm flex items-center justify-center gap-2"
-                      >
-                          Elige tu asesor
-                      </button>
+                      {advisersEnabled && (
+                        <button
+                            type="button"
+                            onClick={() => setActiveSection('advisers')}
+                            className="w-full bg-white border border-gray-100 text-gray-800 font-secondary font-bold text-xs uppercase tracking-widest py-4 rounded-full transition-all hover:bg-gray-50 shadow-sm flex items-center justify-center gap-2"
+                        >
+                            Canales de venta
+                        </button>
+                      )}
                   </div>
                </form>
             </div>
           )}
 
           {/* SECTION 2: DYNAMIC CALENDAR BOOKING FORM (PHASE 2) */}
-          {activeSection === 'booking' && (
+          {activeSection === 'booking' && bookingEnabled && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
               <h2 className="text-gray-800 font-extrabold mb-4 text-sm uppercase tracking-wider text-primary">Fija una cita con nosotros</h2>
               
               {bookingStep === 1 ? (
                 <div className="space-y-6">
+                  {/* Meeting Type Selection (must be picked first: it changes adviser availability) */}
+                  <div className="form-control">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wide block mb-2">Tipo de Reunión</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { value: 'VIRTUAL', label: 'Reunión Virtual' },
+                        { value: 'IN_PERSON', label: 'Visita Presencial' },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => handleChangeMeetingType(opt.value)}
+                          className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                            bookingMeetingType === opt.value
+                              ? 'bg-gray-800 text-white border-gray-800 shadow-md'
+                              : 'bg-white text-gray-600 hover:bg-gray-50 border-gray-200'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Calendar Month Selector */}
                   <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <span className="font-bold text-sm text-gray-800">
@@ -923,6 +1055,7 @@ const Contact = () => {
                     <p className="font-extrabold text-gray-800 flex items-center gap-1.5"><CalendarIcon size={14} className="text-primary" /> Detalles de tu reserva:</p>
                     <p><strong>Fecha:</strong> {new Date(selectedBookingDate + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
                     <p><strong>Hora:</strong> {selectedBookingHour} hs</p>
+                    <p><strong>Modalidad:</strong> {bookingMeetingType === 'VIRTUAL' ? 'Reunión Virtual' : 'Visita Presencial'}</p>
                   </div>
 
                   <div className="form-control">
@@ -968,39 +1101,12 @@ const Contact = () => {
                     />
                   </div>
 
-                  {/* Meeting Type Selection */}
-                  <div className="form-control">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wide block mb-1">Tipo de Reunión</label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-600 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="bookingType"
-                          checked={bookingMeetingType === "VIRTUAL"}
-                          onChange={() => setBookingMeetingType("VIRTUAL")}
-                          className="radio radio-primary radio-xs"
-                        />
-                        Reunión Virtual
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-600 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="bookingType"
-                          checked={bookingMeetingType === "IN_PERSON"}
-                          onChange={() => setBookingMeetingType("IN_PERSON")}
-                          className="radio radio-primary radio-xs"
-                        />
-                        Visita Presencial
-                      </label>
-                    </div>
-                  </div>
-
                   {/* Units checklist */}
                   <div className="form-control">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wide block mb-1">Unidades de interés</label>
-                    <div className="border border-gray-150 rounded-xl p-3 max-h-24 overflow-y-auto grid grid-cols-3 gap-2">
+                    <div className="border border-gray-150 rounded-xl p-3 max-h-40 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {unitsList.map(u => (
-                        <label key={u.id} className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 cursor-pointer">
+                        <label key={u.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-50 rounded-lg px-1.5 py-1 transition-colors">
                           <input
                             type="checkbox"
                             checked={bookingUnits.includes(u.id)}
@@ -1011,9 +1117,19 @@ const Contact = () => {
                                 setBookingUnits(prev => prev.filter(id => id !== u.id));
                               }
                             }}
-                            className="checkbox checkbox-primary checkbox-xs"
+                            className="checkbox checkbox-primary checkbox-xs shrink-0"
                           />
-                          {u.identifier}
+                          <span className="flex flex-col leading-tight">
+                            <span className="flex items-center gap-1.5">
+                              <span className="font-bold text-gray-800">Depto. {u.identifier}</span>
+                              {u.category && (
+                                <span className={`text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${u.category === 'Dúplex' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                                  {u.category}
+                                </span>
+                              )}
+                            </span>
+                            {u.detail && <span className="text-[10px] text-gray-400 font-medium">{u.detail}</span>}
+                          </span>
                         </label>
                       ))}
                     </div>
@@ -1043,10 +1159,10 @@ const Contact = () => {
           )}
 
           {/* SECTION 3: ADVISERS DISPLAY */}
-          {activeSection === 'advisers' && (
+          {activeSection === 'advisers' && advisersEnabled && (
             <div className="animate-in fade-in slide-in-from-top-4 duration-500">
                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-gray-800 font-bold text-sm uppercase tracking-wider">Asesores</h2>
+                  <h2 className="text-gray-800 font-bold text-sm uppercase tracking-wider">Canales de venta</h2>
                   <button 
                     onClick={() => setActiveSection('form')}
                     className="text-gray-400 hover:text-brand-primary text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 transition-colors"
@@ -1068,7 +1184,9 @@ const Contact = () => {
         {/* Footer info */}
         <div className="px-8 pb-4 mt-auto space-y-4 bg-gray-50/50">
              <div>
-                <h3 className="text-gray-800 text-xs font-bold uppercase mb-2">{config.company?.realStateName}</h3>
+                <a href={config.company?.realStateWebsite} target="_blank" rel="noopener noreferrer" className="inline-block">
+                    <h3 className="text-gray-800 hover:text-brand-primary transition-colors text-xs font-bold uppercase mb-2">{config.company?.realStateName}</h3>
+                </a>
                 <p className="text-gray-500 text-[10px] leading-relaxed mb-2">
                     {config.company?.realStateSlogan}
                 </p>
@@ -1086,7 +1204,9 @@ const Contact = () => {
              </div>
 
              <div>
-                <h3 className="text-gray-800 text-xs font-bold uppercase mb-2">{config.company?.developer}</h3>
+                <a href={config.company?.developerWebsite} target="_blank" rel="noopener noreferrer" className="inline-block">
+                    <h3 className="text-gray-800 hover:text-brand-primary transition-colors text-xs font-bold uppercase mb-2">{config.company?.developer}</h3>
+                </a>
                 <p className="text-gray-500 text-[10px] leading-relaxed mb-2">
                     {config.company?.developerSlogan}
                 </p>

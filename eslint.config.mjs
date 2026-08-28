@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Salida de `npm run build:worker`. No viene en los ignores por defecto,
+    // así que sin esto un `npm run lint` después de compilar el worker recorre
+    // ~34 MB de código generado y devuelve decenas de miles de falsos avisos.
+    ".open-next/**",
   ]),
 ]);
 

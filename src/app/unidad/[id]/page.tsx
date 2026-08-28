@@ -5,13 +5,17 @@ import { ArrowLeft, Share2, X, MoreVertical, Menu, Ruler, Bed, Bath, PanelRightO
 import { UnitStatusString, type Floor, type Unit } from '@/data/floors';
 import Sidebar from '@/components/layout/Sidebar';
 import RequestInfoModal from '@/components/modals/RequestInfoModal';
-import BrochureModal from '@/components/modals/BrochureModal';
+import config from '@/config/config';
 import InlineGallery from '@/components/gallery/InlineGallery';
 import TourHeader from '@/components/UI/TourHeader';
 import { preloadImages, preloadVideo } from '@/utils/preload';
 import FullScreenToggle from '@/components/UI/FullScreenToggle';
 import { getAssetUrl, assetManifest } from '@/utils/assets';
 import { useStore } from '@/store/useStore';
+
+// The three views of a unit the user can switch between (the gallery and the
+// 360 tour are overlays, not part of this track).
+type StaticView = 'furnished' | 'unfurnished' | 'plans';
 
 const UnitPage = () => {
     const params = useParams();
@@ -24,12 +28,12 @@ const UnitPage = () => {
     const unit = floor?.units.find(u => u.id === unitId);
 
     const isDuplex = unit && (unit.subtitle === 'Dúplex' || unit.subtitle === 'Duplex' || ['801', '802'].includes(unit.identifier || ''));
-    const isPiso1 = unit && floor?.id === '8';
+    const isPiso1 = unit && floor?.id === '5';
 
     // Find the other level unit
     let otherLevelUnit: any = undefined;
     if (unit && isDuplex) {
-        const targetFloorId = floor?.id === '8' ? '9' : '8';
+        const targetFloorId = floor?.id === '5' ? '6' : '5';
         for (const f of floorsData) {
             if (f.id === targetFloorId) {
                 otherLevelUnit = f.units.find(u => u.identifier === unit.identifier);
@@ -69,8 +73,52 @@ const UnitPage = () => {
             .catch(err => console.error("Error fetching brochure:", err));
     }, [unitId]);
 
+    const handleShare = async () => {
+        if (!unit) return;
+        const shareData = {
+            title: `Unidad ${unit.identifier || unit.id} - ${config.company?.buildingName || 'Showroom'}`,
+            text: `Mira la unidad ${unit.identifier || unit.id}`,
+            url: typeof window !== 'undefined' ? window.location.href : ''
+        };
+
+        if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+            try {
+                await navigator.share(shareData);
+            } catch (err) {
+                console.warn("Share failed:", err);
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(window.location.href);
+                alert("Enlace copiado al portapapeles");
+            } catch (err) {
+                console.error("Clipboard copy failed:", err);
+            }
+        }
+    };
+
     // --- ASSET RESOLUTION HELPERS ---
+    // Folder holding this unit's views and transition videos. Units that repeat
+    // the same typology share one folder (201/301/401 -> x01, 202/302/402 -> x02),
+    // so it is read from the view paths stored in the DB instead of being derived
+    // from the unit id. Falls back to the id for manifest-only units.
+    const getAssetFolder = (assetId: string) => {
+        const stored = unit?.photosFurnished?.[0] || unit?.photosUnfurnished?.[0] || unit?.photosPlans?.[0];
+        const match = stored?.match(/plants\/details\/([^/]+)\//);
+        if (match) return match[1];
+        return assetId.replace(/^unit_\d+_/, '');
+    };
+
     const getTransitionUrl = (assetId: string, type: string) => {
+        const folderPath = `plants/details/${getAssetFolder(assetId)}/transitions/${type}.mp4`;
+        if (assetManifest.includes(folderPath)) {
+            return getAssetUrl(folderPath);
+        }
+        const cleanAssetId = assetId.replace(/^unit_\d+_/, '');
+        const relativePathClean = `plants/details/${cleanAssetId}/transitions/${type}.mp4`;
+        if (assetManifest.includes(relativePathClean)) {
+            return getAssetUrl(relativePathClean);
+        }
         const relativePath = `plants/details/${assetId}/transitions/${type}.mp4`;
         // Check manifest
         if (assetManifest.includes(relativePath)) {
@@ -80,18 +128,35 @@ const UnitPage = () => {
     };
 
     const getUnitGalleryImages = (assetId: string, title?: string) => {
+        // 0. Try DB gallery first
+        if (unit && unit.gallery && unit.gallery.length > 0) {
+            const label = unit.identifier || unit.id;
+            return unit.gallery.map((src, idx) => ({
+                id: `db-gallery-${idx}`,
+                src: getAssetUrl(src),
+                alt: `Unidad ${label} — imagen ${idx + 1}`,
+                title: `Unidad ${label}`
+            }));
+        }
+
+        const cleanAssetId = assetId.replace(/^unit_\d+_/, '');
         // 1. Try Manifest First
         const specificImages = assetManifest
-            .filter(path => path.includes(`plants/details/${assetId}/gallery/`));
+            .filter(path => path.includes(`plants/details/${cleanAssetId}/gallery/`))
+            .concat(
+                assetManifest.filter(path => path.includes(`plants/details/${assetId}/gallery/`))
+            );
+        // deduplicate specificImages
+        const uniqueImages = Array.from(new Set(specificImages));
 
         // 2. Dynamic Fallback (if manifest empty)
         // Used for Terraza (902) where images are on Cloudflare but not in manifest
-        if (specificImages.length === 0) {
+        if (uniqueImages.length === 0) {
             const dynamicImages = [];
             // Probe 1..10
             for (let i = 1; i <= 10; i++) {
-                dynamicImages.push(`plants/details/${assetId}/gallery/${i}.jpg`);
-                dynamicImages.push(`plants/details/${assetId}/gallery/${i}.png`); // Fallback extension
+                dynamicImages.push(`plants/details/${cleanAssetId}/gallery/${i}.jpg`);
+                dynamicImages.push(`plants/details/${cleanAssetId}/gallery/${i}.png`); // Fallback extension
             }
 
             return dynamicImages.map(path => ({
@@ -102,7 +167,7 @@ const UnitPage = () => {
             }));
         }
 
-        return specificImages.map(path => ({
+        return uniqueImages.map(path => ({
             id: path,
             src: getAssetUrl(path),
             alt: `Unit ${title || assetId} Gallery`,
@@ -111,7 +176,27 @@ const UnitPage = () => {
     };
 
     const getStaticViewUrl = (assetId: string, type: 'furnished' | 'unfurnished' | 'plans') => {
+        // 0. Try DB urls first
+        if (unit) {
+            if (type === 'furnished' && unit.photosFurnished && unit.photosFurnished.length > 0) {
+                return getAssetUrl(unit.photosFurnished[0]);
+            }
+            if (type === 'unfurnished' && unit.photosUnfurnished && unit.photosUnfurnished.length > 0) {
+                return getAssetUrl(unit.photosUnfurnished[0]);
+            }
+            if (type === 'plans' && unit.photosPlans && unit.photosPlans.length > 0) {
+                return getAssetUrl(unit.photosPlans[0]);
+            }
+        }
+
+        const cleanAssetId = assetId.replace(/^unit_\d+_/, '');
         const extensions = ['jpg', 'jpeg', 'png'];
+        for (const ext of extensions) {
+            const relativePath = `plants/details/${cleanAssetId}/${type}.${ext}`;
+            if (assetManifest.includes(relativePath)) {
+                return getAssetUrl(relativePath);
+            }
+        }
         for (const ext of extensions) {
             const relativePath = `plants/details/${assetId}/${type}.${ext}`;
             if (assetManifest.includes(relativePath)) {
@@ -259,7 +344,10 @@ const UnitPage = () => {
         if (viewMode === 'gallery') {
             return (
                 <div className="w-full h-full bg-black">
-                    <InlineGallery images={unitGalleryImages} />
+                    <InlineGallery
+                        images={unitGalleryImages}
+                        onOpenSidebar={() => setIsSidebarOpen(true)}
+                    />
                 </div>
             );
         }
@@ -312,20 +400,33 @@ const UnitPage = () => {
     };
 
     // Navigation State Logic
+    // The three static views sit on a left-to-right track, and each view offers
+    // the other two — every pair has its own transition video, so any jump
+    // animates. The Terraza has no empty-apartment render, so it drops that stop.
+    const viewTrack: StaticView[] = ['plans', 'furnished', 'unfurnished'];
+
+    const getViewLabel = (view: StaticView) => {
+        if (view === 'furnished') return unit.subtitle === 'Terraza' ? 'Terraza' : 'Amoblado';
+        if (view === 'unfurnished') return 'Sin Amoblar';
+        return 'Medidas';
+    };
+
     const getNavState = () => {
-        // Special case for 'Terraza' unit - No 'unfurnished' view
-        if (unit.subtitle === 'Terraza') {
-            if (viewMode === 'plans') return { showLeft: true, showRight: false, leftTarget: 'furnished' as const };
-            if (viewMode === 'furnished') return { showLeft: false, showRight: true, rightTarget: 'plans' as const }; // showLeft false to hide Unfurnished
-            return { showLeft: false, showRight: false };
+        if (viewMode !== 'furnished' && viewMode !== 'unfurnished' && viewMode !== 'plans') {
+            return { showLeft: false, showRight: false }; // Gallery or tour
         }
 
-        // Allow switching freely between all three typologies (transition
-        // videos exist for every pair, including unfurnished <-> plans).
-        if (viewMode === 'unfurnished') return { showLeft: true, showRight: true, leftTarget: 'furnished' as const, rightTarget: 'plans' as const };
-        if (viewMode === 'plans') return { showLeft: true, showRight: true, leftTarget: 'unfurnished' as const, rightTarget: 'furnished' as const };
-        if (viewMode === 'furnished') return { showLeft: true, showRight: true, leftTarget: 'unfurnished' as const, rightTarget: 'plans' as const };
-        return { showLeft: false, showRight: false }; // Gallery or other
+        const track = unit.subtitle === 'Terraza'
+            ? viewTrack.filter(view => view !== 'unfurnished')
+            : viewTrack;
+        const others = track.filter(view => view !== viewMode);
+
+        return {
+            showLeft: others.length > 0,
+            leftTarget: others[0],
+            showRight: others.length > 1,
+            rightTarget: others[1],
+        };
     };
 
     const navState = getNavState();
@@ -341,13 +442,15 @@ const UnitPage = () => {
                 isOpen={isRequestModalOpen}
                 onClose={() => setIsRequestModalOpen(false)}
                 unitId={unit.id}
+                unitIdentifier={unit.identifier || unit.id}
                 floorId={floor.id}
             />
-            <BrochureModal unitId={unitId} />
 
             {/* GLOBAL SIDEBAR TOGGLE */}
-            {/* GLOBAL CONTROLS (Left) */}
-            <div className="fixed top-6 left-6 z-50 flex flex-col items-start gap-4 group pointer-events-auto">
+            {/* GLOBAL CONTROLS (Left) — step aside in tour mode, same as the
+                right-hand stack: the viewer's own back pill sits here and the
+                360 is meant to be seen edge to edge. */}
+            <div className={`fixed top-6 left-6 z-50 flex flex-col items-start gap-4 group transition-opacity duration-300 ${viewMode === 'tour' ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'}`}>
 
                 {/* Row 1: Menu + Back */}
                 <div className="flex items-center gap-3">
@@ -441,7 +544,11 @@ const UnitPage = () => {
                                 </span>
                             )}
 
-                            <button className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500">
+                            <button
+                                onClick={handleShare}
+                                className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500"
+                                title="Compartir"
+                            >
                                 <Share2 size={20} />
                             </button>
                             <button
@@ -497,10 +604,11 @@ const UnitPage = () => {
                                     className="text-center py-12 rounded-xl relative overflow-hidden group shadow-inner"
                                     style={{
                                         backgroundImage: (() => {
+                                            const cleanAssetId = assetId.replace(/^unit_\d+_/, '');
                                             // Prefer the unit's first gallery image as the poster backdrop.
-                                            const hasGallery = assetManifest.some(p => p.includes(`plants/details/${assetId}/gallery/`));
+                                            const hasGallery = assetManifest.some(p => p.includes(`plants/details/${cleanAssetId}/gallery/`)) || (unitGalleryImages && unitGalleryImages.length > 0);
                                             if (hasGallery && unitGalleryImages[0]?.src) return `url(${unitGalleryImages[0].src})`;
-                                            const posterPath = `plants/details/${assetId}/poster.png`;
+                                            const posterPath = `plants/details/${cleanAssetId}/poster.png`;
                                             return assetManifest.includes(posterPath) ? `url(${getAssetUrl(posterPath)})` : 'none';
                                         })(),
                                         backgroundSize: 'cover',
@@ -537,21 +645,7 @@ const UnitPage = () => {
                                         <span className="text-sm font-medium">{unit.bathrooms} Baños</span>
                                     </li>
                                 </ul>
-                                {/* Brochure Section */}
-                                {brochure && (
-                                    <div className="pt-2">
-                                        <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-900 mb-4">Brochure Asignado</h3>
-                                        <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                            <div className="p-2 rounded-lg bg-white shadow-sm text-brand-gold">
-                                                <FileText strokeWidth={1.5} size={20} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs text-gray-500 uppercase tracking-wider font-bold">PDF</p>
-                                                <p className="text-sm font-semibold text-neutral-900 truncate">{brochure.title}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+
                             </div>
                         )}
 
@@ -560,22 +654,15 @@ const UnitPage = () => {
 
                 {/* Footer Actions */}
                 <div className="p-6 border-t border-gray-100 bg-white w-full xl:min-w-[420px] flex flex-col gap-4">
-                    {/* Brochure & Disclaimer Group (Row on Mobile/Landscape, Stacked on Desktop) */}
                     {brochure && (
-                        <div className="flex flex-row items-center gap-4 lg:flex-col lg:gap-6">
-                            {/* Brochure Button */}
-                            <button
-                                onClick={() => {
-                                    useStore.getState().toggleBrochure(true);
-                                }}
-                                className="flex-1 lg:w-full py-4 bg-brand-primary text-white rounded-xl font-bold text-sm transition-colors shadow-sm border border-gray-100"
-                            >
-                                Ver Brochure
-                            </button>
-
-                            {/* Disclaimer */}
-                            <p className="flex-1 text-center text-xs text-gray-400 font-medium whitespace-nowrap lg:whitespace-normal">Disclaimer</p>
-                        </div>
+                        <button
+                            onClick={() => {
+                                useStore.getState().toggleBrochure(true);
+                            }}
+                            className="w-full py-4 bg-brand-primary text-white rounded-xl font-bold text-sm transition-colors shadow-sm border border-gray-100"
+                        >
+                            Ver Brochure
+                        </button>
                     )}
 
                     {/* Request Info Button (Row Style) */}
@@ -617,7 +704,9 @@ const UnitPage = () => {
                             title="Galería"
                         >
                             <ImageIcon size={20} />
-                            <span className="hidden xl:inline font-medium text-sm tracking-wide">Galería</span>
+                            <span className="hidden xl:inline font-medium text-sm tracking-wide">
+                                {viewMode === 'gallery' ? 'Volver' : 'Galería'}
+                            </span>
                         </button>
 
                         {/* Recorrido */}
@@ -769,6 +858,14 @@ const UnitPage = () => {
                                     setIsPlayingTransition(false);
                                     setTransitionVideo(null);
                                 }}
+                                // Without this a video that fails to load leaves the
+                                // overlay covering the plan for good. The target view is
+                                // already set by this point, so dropping the overlay lands
+                                // the user on it — just without the morph.
+                                onError={() => {
+                                    setIsPlayingTransition(false);
+                                    setTransitionVideo(null);
+                                }}
                             />
                         </div>
                     )}
@@ -786,12 +883,11 @@ const UnitPage = () => {
                             {navState.showLeft && navState.leftTarget && (
                                 <button
                                     onClick={() => startTransition(navState.leftTarget!)}
-                                    className="absolute left-6 top-1/2 -translate-y-1/2 z-30 flex items-center gap-3 p-3 bg-black/40 hover:bg-black/60 backdrop-blur text-white rounded-full transition-all group pr-5"
+                                    className="absolute left-6 top-1/2 -translate-y-1/2 z-30 flex items-center gap-3 p-3 pr-5 bg-black/40 hover:bg-black/60 backdrop-blur text-white rounded-full transition-all group"
                                 >
                                     <ChevronLeft size={28} className="group-hover:-translate-x-1 transition-transform" />
                                     <span className="text-sm font-medium tracking-wide uppercase hidden sm:block">
-                                        {navState.leftTarget === 'furnished' && (unit.subtitle === 'Terraza' ? 'Terraza' : 'Amoblado')}
-                                        {navState.leftTarget === 'unfurnished' && 'Sin Amoblar'}
+                                        {getViewLabel(navState.leftTarget)}
                                     </span>
                                 </button>
                             )}
@@ -799,11 +895,10 @@ const UnitPage = () => {
                             {navState.showRight && navState.rightTarget && (
                                 <button
                                     onClick={() => startTransition(navState.rightTarget!)}
-                                    className="absolute right-6 top-1/2 -translate-y-1/2 z-30 flex items-center gap-3 p-3 bg-black/40 hover:bg-black/60 backdrop-blur text-white rounded-full transition-all group pl-5"
+                                    className="absolute right-6 top-1/2 -translate-y-1/2 z-30 flex items-center gap-3 p-3 pl-5 bg-black/40 hover:bg-black/60 backdrop-blur text-white rounded-full transition-all group"
                                 >
                                     <span className="text-sm font-medium tracking-wide uppercase hidden sm:block">
-                                        {navState.rightTarget === 'furnished' && (unit.subtitle === 'Terraza' ? 'Terraza' : 'Amoblado')}
-                                        {navState.rightTarget === 'plans' && (unit.subtitle === 'Terraza' ? 'Medidas' : 'Medidas')}
+                                        {getViewLabel(navState.rightTarget)}
                                     </span>
                                     <ChevronRight size={28} className="group-hover:translate-x-1 transition-transform" />
                                 </button>

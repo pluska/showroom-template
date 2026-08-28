@@ -3,7 +3,6 @@ import { auth } from "@/auth";
 import IdentityForm from "@/components/dashboard/identity/IdentityForm";
 import { Palette } from "lucide-react";
 
-export const runtime = "edge";
 
 export const metadata = {
   title: "Identidad - Dashboard",

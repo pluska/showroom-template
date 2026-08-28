@@ -2,7 +2,7 @@
 
 import { getDb } from "@/lib/db";
 import { galleryCollections, media } from "@/lib/db/schema";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 
@@ -21,13 +21,17 @@ export async function getGalleryCollections() {
 export async function getGalleryImages(collectionId: string) {
   const db = await getDb();
   
+  const categories = collectionId === 'amenities' 
+    ? ['amenities', 'AMENITIES_GALLERY'] 
+    : [collectionId];
+  
   const images = await db
     .select()
     .from(media)
     .where(
       and(
         isNull(media.deletedAt),
-        eq(media.category, collectionId),
+        inArray(media.category, categories),
         eq(media.isActive, true)
       )
     );

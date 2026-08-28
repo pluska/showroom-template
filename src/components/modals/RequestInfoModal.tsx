@@ -1,14 +1,17 @@
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { createProspectAction } from '@/app/actions/calendar';
+import config from '@/config/config';
 
 interface RequestInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
   unitId: string;
+  unitIdentifier?: string;
   floorId: string;
 }
 
-export default function RequestInfoModal({ isOpen, onClose, unitId, floorId }: RequestInfoModalProps) {
+export default function RequestInfoModal({ isOpen, onClose, unitId, unitIdentifier, floorId }: RequestInfoModalProps) {
   const [formData, setFormData] = useState({
     nombres: '',
     apellido: '',
@@ -22,6 +25,7 @@ export default function RequestInfoModal({ isOpen, onClose, unitId, floorId }: R
     auth: false
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   if (!isOpen) return null;
@@ -77,10 +81,40 @@ export default function RequestInfoModal({ isOpen, onClose, unitId, floorId }: R
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-        console.log('Form Submitted', { ...formData, unitId, floorId });
+        setIsSubmitting(true);
+        try {
+            // 1. Guardar prospecto en la base de datos
+            await createProspectAction({
+                name: `${formData.nombres} ${formData.apellido}`,
+                email: formData.email,
+                phone: formData.celular,
+                unitId: unitId
+            });
+
+            // 2. Enviar correo vía PHP Mailer (config.mailerUrl)
+            if (config.mailerUrl) {
+                await fetch(config.mailerUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...formData,
+                        nombreCompleto: `${formData.nombres} ${formData.apellido}`,
+                        proyecto: config.company?.buildingName || config.appName,
+                        unidad: unitIdentifier || unitId.replace(/^unit_\d+_/, '').replace(/^unit_pb_/, 'PB ').toUpperCase(),
+                        piso: floorId,
+                        unitId: unitId.replace('unit_', ''),
+                        floorId
+                    }),
+                }).catch(e => console.error("Error al enviar vía mailer PHP:", e));
+            }
+        } catch (err) {
+            console.error("Error storing prospect:", err);
+        } finally {
+            setIsSubmitting(false);
+        }
         onClose();
         alert('Gracias, nos pondremos en contacto contigo.');
     }
@@ -95,14 +129,14 @@ export default function RequestInfoModal({ isOpen, onClose, unitId, floorId }: R
       />
 
       {/* Modal Container */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-[600px] max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-[600px] max-h-[90%] flex flex-col animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="flex justify-between items-start p-6 pb-4 border-b border-gray-100 shrink-0">
           <div>
             <h2 className="text-xl font-bold text-neutral-900 uppercase tracking-wide">Solicita información</h2>
             <p className="text-sm text-brand-primary mt-1 font-medium">
-              Interés en Unidad {unitId}, Piso {floorId}
+              Interés en Unidad {unitIdentifier || unitId.replace(/^unit_\d+_/, '').replace(/^unit_pb_/, 'PB ').toUpperCase()}, Piso {floorId}
             </p>
           </div>
           <button 
@@ -258,9 +292,17 @@ export default function RequestInfoModal({ isOpen, onClose, unitId, floorId }: R
               <div className="pt-4 pb-2">
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-brand-primary hover:bg-brand-primary/90 text-white font-bold rounded-lg text-sm uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 bg-brand-primary hover:bg-brand-primary/90 text-white font-bold rounded-lg text-sm uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Confirmar
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    'Confirmar'
+                  )}
                 </button>
               </div>
 

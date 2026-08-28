@@ -2,7 +2,6 @@ import { Box } from "lucide-react";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
-export const runtime = "edge";
 
 export default async function BoxPage() {
   const session = await auth();

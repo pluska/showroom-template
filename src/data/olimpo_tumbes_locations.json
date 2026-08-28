@@ -1,0 +1,465 @@
+{
+  "type": "FeatureCollection",
+  "_nota": "Puntos de interes de Tumbes entregados por el cliente, en el shape que consume la app (nombre/categoria/imagen). `icono` conserva el slug original. Las dos features del propio proyecto (el punto \"El Olimpo de Tumbes\" y el perimetro \"Olimpo\") no viven aqui: el punto es config.company.buildingCoordinates y el perimetro es src/data/project-outline.ts.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Centro de Acuicultura Tuna Carranza",
+        "categoria": "Turismo y Naturaleza",
+        "imagen": "icons/olimpo/logo_centrodeacuicultura.png",
+        "icono": "logo_centrodeacuicultura"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.395565,
+          -3.509923
+        ],
+        "type": "Point"
+      },
+      "id": "00a3dd1c4de1f4b217b6f16891b06324"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Puerto Pizarro",
+        "categoria": "Turismo y Naturaleza",
+        "imagen": "icons/olimpo/logo_playa.png",
+        "icono": "logo_playa"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.389245,
+          -3.499531
+        ],
+        "type": "Point"
+      },
+      "id": "01d7275d4729a1e9f994d37c7a35085f"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Costa Mar Plaza",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_costamarplaza.png",
+        "icono": "logo_costamarplaza"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.457395,
+          -3.568045
+        ],
+        "type": "Point"
+      },
+      "id": "05d7a82356778eaef2eeda15b5d81caf"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Corrales",
+        "categoria": "Ciudad y Centro Poblado",
+        "imagen": "icons/olimpo/logo_centropoblado.png",
+        "icono": "logo_centropoblado"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.480687,
+          -3.601084
+        ],
+        "type": "Point"
+      },
+      "id": "0aa3195f1c1f6b000adc530fc2a978e2"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Ittsa Bus",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_ittsabus.png",
+        "icono": "logo_ittsabus"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.44838,
+          -3.556438
+        ],
+        "type": "Point"
+      },
+      "id": "107440b8cef5af9bc439403d2e1f36ec"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Hotel Wyndham",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_hotelwyndham.png",
+        "icono": "logo_hotelwyndham"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.457303,
+          -3.567813
+        ],
+        "type": "Point"
+      },
+      "id": "1124becefaa673e100355cbbd149caa1"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Playa Zorritos",
+        "categoria": "Turismo y Naturaleza",
+        "imagen": "icons/olimpo/logo_playa.png",
+        "icono": "logo_playa"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.676611,
+          -3.677821
+        ],
+        "type": "Point"
+      },
+      "id": "1d98068d3404df1c7cb61a1af00bc7df"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Metro",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_metro.png",
+        "icono": "logo_metro"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.457309,
+          -3.56755
+        ],
+        "type": "Point"
+      },
+      "id": "209b16412a94977c3a85a46648ab773b"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Vía de acceso directo al Aeropuerto",
+        "categoria": "Vías y Accesos",
+        "imagen": "icons/olimpo/logo_carretera.png",
+        "icono": "logo_carretera"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.392593,
+          -3.543564
+        ],
+        "type": "Point"
+      },
+      "id": "267380b6f3cf0eaedb555e795e06e9ea"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Estilos",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_tiendaestilos.png",
+        "icono": "logo_tiendaestilos"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.457376,
+          -3.567645
+        ],
+        "type": "Point"
+      },
+      "id": "4758d976e83c54d3998bb798a2b76ed8"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Manglares de Tumbes",
+        "categoria": "Turismo y Naturaleza",
+        "imagen": "icons/olimpo/logo_manglaresdetumbes.png",
+        "icono": "logo_manglaresdetumbes"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.275915,
+          -3.426484
+        ],
+        "type": "Point"
+      },
+      "id": "6b35f656389abaa5b0a02515861303ac"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Mercado Modelo de Tumbes",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_mercadomodelodetumbes.png",
+        "icono": "logo_mercadomodelodetumbes"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.455552,
+          -3.571182
+        ],
+        "type": "Point"
+      },
+      "id": "8e7820a37dbd19dd2cf6240897f22570"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Universidad Nacional de Tumbes",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_universidadnacionaldetumbes.png",
+        "icono": "logo_universidadnacionaldetumbes"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.443727,
+          -3.582758
+        ],
+        "type": "Point"
+      },
+      "id": "8fa58f90ddd12bb4768f15946137b1c7"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Plaza de Armas",
+        "categoria": "Turismo y Naturaleza",
+        "imagen": null,
+        "icono": "logo_plazadearmas"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.459632,
+          -3.570838
+        ],
+        "type": "Point"
+      },
+      "id": "97d5fa6782332cc45f9c64bf9a069b8f"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Plaza Vea",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_plazavea.png",
+        "icono": "logo_plazavea"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.453435,
+          -3.55873
+        ],
+        "type": "Point"
+      },
+      "id": "9d1ba5ff0bd7c9f34e5a21d31be1b3e0"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Ciudadela de Noé",
+        "categoria": "Ciudad y Centro Poblado",
+        "imagen": "icons/olimpo/logo_centropoblado.png",
+        "icono": "logo_centropoblado"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.422994,
+          -3.572058
+        ],
+        "type": "Point"
+      },
+      "id": "a9ef7ca0205cbe82e614b20fb1666b49"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Paseos en Kayak",
+        "categoria": "Turismo y Naturaleza",
+        "imagen": "icons/olimpo/logo_kayak.png",
+        "icono": "logo_kayak"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.424844,
+          -3.532172
+        ],
+        "type": "Point"
+      },
+      "id": "ac4ba49726930b86255a4fe07fff3fa1"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Topitop",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_topitop.png",
+        "icono": "logo_topitop"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.457523,
+          -3.567992
+        ],
+        "type": "Point"
+      },
+      "id": "aee033eeb1054c64fdbd50e9ec6f42bf"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "UVK Multicines",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_uvk.png",
+        "icono": "logo_uvk"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.457458,
+          -3.567658
+        ],
+        "type": "Point"
+      },
+      "id": "d16e23c406cb7d867b4c6463495afa9c"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Panamericana Norte",
+        "categoria": "Vías y Accesos",
+        "imagen": "icons/olimpo/logo_carretera.png",
+        "icono": "logo_carretera"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.429155,
+          -3.553863
+        ],
+        "type": "Point"
+      },
+      "id": "d2401056f182a2dbc949795c4fc33d40"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Av. Fernando Belaunde Terry",
+        "categoria": "Vías y Accesos",
+        "imagen": "icons/olimpo/logo_carretera.png",
+        "icono": "logo_carretera"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.424523,
+          -3.567579
+        ],
+        "type": "Point"
+      },
+      "id": "db51df85448628a3cf9e30ac6b2845be"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Av. Mariscal Castilla",
+        "categoria": "Vías y Accesos",
+        "imagen": "icons/olimpo/logo_carretera.png",
+        "icono": "logo_carretera"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.453977,
+          -3.567319
+        ],
+        "type": "Point"
+      },
+      "id": "dd7ef3a48c552b26d7a30b5ce1b6bbd6"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Localidad Aguas Verdes",
+        "categoria": "Ciudad y Centro Poblado",
+        "imagen": "icons/olimpo/logo_centropoblado.png",
+        "icono": "logo_centropoblado"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.246057,
+          -3.481733
+        ],
+        "type": "Point"
+      },
+      "id": "e142fd4843c627be682813e77d610111"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Aeropuerto",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_aeropuerto.png",
+        "icono": "logo_aeropuerto"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.384104,
+          -3.549519
+        ],
+        "type": "Point"
+      },
+      "id": "e68834ee2e8cc988198dac553f8c836c"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Patio de comidas",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_patiodecomidas.png",
+        "icono": "logo_patiodecomidas"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.457389,
+          -3.567739
+        ],
+        "type": "Point"
+      },
+      "id": "eb445a35a8cd2135694d3e8e166aa9ef"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Hospital Regional JAMO II-2",
+        "categoria": "Servicios Esenciales",
+        "imagen": "icons/olimpo/logo_hospital.png",
+        "icono": "logo_hospital"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.418544,
+          -3.574019
+        ],
+        "type": "Point"
+      },
+      "id": "ee036278e6acf6769b673106b72d8a23"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "nombre": "Av. Tumbes",
+        "categoria": "Vías y Accesos",
+        "imagen": "icons/olimpo/logo_carretera.png",
+        "icono": "logo_carretera"
+      },
+      "geometry": {
+        "coordinates": [
+          -80.456882,
+          -3.565162
+        ],
+        "type": "Point"
+      },
+      "id": "fe634e706168d47cdf3f791be5df52e3"
+    }
+  ]
+}

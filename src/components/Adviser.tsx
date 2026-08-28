@@ -25,6 +25,18 @@ interface AdviserProps {
   variant?: 'compact' | 'row';
 }
 
+// Un canal corporativo se identifica con su logotipo; solo los asesores con
+// nombre llevan avatar de persona. Poner una silueta humana sobre "Titanio"
+// haría pasar por asesor lo que es la central de una empresa.
+const Avatar = ({ adviser, size }: { adviser: AdviserData; size: string }) => {
+  if (adviser.logo) {
+    return <img src={adviser.logo} alt={adviser.name} className={`${size} object-contain relative z-10`} />;
+  }
+  return adviser.gender === 'female'
+    ? <FemaleAvatarIcon className={`${size} relative z-10`} />
+    : <MaleAvatarIcon className={`${size} relative z-10`} />;
+};
+
 const Adviser: React.FC<AdviserProps> = ({ adviser, variant = 'compact' }) => {
   const whatsappUrl = `https://wa.me/${adviser.phone.replace(/\D/g, '')}?text=${encodeURIComponent(adviser.whatsappMessage)}`;
 
@@ -38,11 +50,7 @@ const Adviser: React.FC<AdviserProps> = ({ adviser, variant = 'compact' }) => {
       >
         <div className="relative w-20 h-20 flex items-center justify-center bg-gray-50 rounded-full text-gray-400 group-hover:bg-gray-100 transition-colors shrink-0">
           <div className="absolute inset-0 bg-brand-primary/5 rounded-full scale-0 group-hover:scale-110 transition-transform duration-500" />
-          {adviser.gender === 'female' ? (
-            <FemaleAvatarIcon className="w-12 h-12 relative z-10" />
-          ) : (
-            <MaleAvatarIcon className="w-12 h-12 relative z-10" />
-          )}
+          <Avatar adviser={adviser} size="w-12 h-12" />
           <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-green-500 border-4 border-white rounded-full flex items-center justify-center z-20 shadow-sm">
             <MessageCircle size={14} className="text-white fill-current" />
           </div>
@@ -50,6 +58,9 @@ const Adviser: React.FC<AdviserProps> = ({ adviser, variant = 'compact' }) => {
         
         <div className="flex flex-col text-left">
           <h3 className="text-gray-800 text-lg font-bold mb-0.5 group-hover:text-brand-primary transition-colors">{adviser.name}</h3>
+          {adviser.role && (
+            <p className="text-gray-500 text-[11px] leading-tight">{adviser.role}</p>
+          )}
           <div className="mt-2 flex items-center gap-1.5 text-brand-primary font-bold text-[10px] uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all translate-x-[-10px] group-hover:translate-x-0">
             <span>Contactar ahora</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -68,11 +79,7 @@ const Adviser: React.FC<AdviserProps> = ({ adviser, variant = 'compact' }) => {
     >
       <div className="relative w-16 h-16 flex items-center justify-center bg-gray-50 rounded-full text-gray-400 group-hover:bg-gray-100 transition-colors shrink-0">
         <div className="absolute inset-0 bg-brand-primary/5 rounded-full scale-0 group-hover:scale-110 transition-transform duration-500" />
-        {adviser.gender === 'female' ? (
-          <FemaleAvatarIcon className="w-10 h-10 relative z-10" />
-        ) : (
-          <MaleAvatarIcon className="w-10 h-10 relative z-10" />
-        )}
+        <Avatar adviser={adviser} size="w-10 h-10" />
         <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-2 border-white rounded-full flex items-center justify-center z-20 shadow-sm">
           <MessageCircle size={12} className="text-white fill-current" />
         </div>

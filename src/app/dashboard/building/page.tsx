@@ -3,7 +3,6 @@ import { getRawBuildingFaces } from "@/app/actions/building";
 import BuildingDashboard from "@/components/dashboard/building/BuildingDashboard";
 import { redirect } from "next/navigation";
 
-export const runtime = "edge";
 
 export const metadata = {
   title: "Gestión del Edificio - Dashboard",
