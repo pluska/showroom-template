@@ -1,5 +1,8 @@
 PRAGMA foreign_keys = OFF;
 DELETE FROM tours;
+-- page_views.unit_id apunta a units: se suelta la referencia antes de borrar,
+-- porque D1 no siempre respeta el PRAGMA de arriba y la FK aborta el seed.
+UPDATE page_views SET unit_id = NULL WHERE unit_id IS NOT NULL;
 DELETE FROM units;
 DELETE FROM floors;
 INSERT INTO floors (id, name, level, type, image_path) VALUES ('floor_pb', 'PB', 0, 'Piso', 'plants/floor_pb.png');

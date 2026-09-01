@@ -1,0 +1,1 @@
+ALTER TABLE `media` ADD `url_night` text;
