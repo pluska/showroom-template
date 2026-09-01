@@ -40,10 +40,11 @@ existe como fila en `floors`.
 
 ## 2. Lo que falta para cerrar la frontera
 
-- **El panel todavía nombra las zonas en su UI.** `UnitsDashboard` tiene tres
-  pestañas escritas a mano (`zone-1`, `zone-2`, `zone-3`) con un juego de
-  filtros distinto para lotes y para torres. La consulta ya no asume cuántas
-  zonas hay; la pestaña sí. Es el siguiente paso, y es trabajo de UI.
+- ~~El panel todavía nombra las zonas en su UI.~~ **Hecho.** `UnitsDashboard`
+  deriva las pestañas de `getUrbanizationZoneTabs()` y los selectores de
+  manzana, torre, piso y tipología del propio inventario, con sus conteos
+  reales. Los filtros salen según lo que la zona **contiene** (`kind`), no
+  según qué zona es, así que una zona mixta pinta los dos juegos.
 - **`ZoneInventoryNote`** (en `enums.ts`) es el matiz que distingue las zonas en
   el inventario. Al añadir una zona con producto vendible, va ahí.
 

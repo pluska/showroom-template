@@ -9,7 +9,8 @@ import { floorsData as staticFloorsData } from "@/data/floors";
 import { LOT_DEFAULT_AREA_SQM, lotBlocks, lotUnits } from "@/data/urbanization/lots";
 import { towers } from "@/data/urbanization/towers";
 import { APARTMENT_AREA_SQM, APARTMENT_TOUR_URL } from "@/data/urbanization/apartments";
-import { TowerLabel, ZoneInventoryNote, ZoneLabel } from "@/data/urbanization/enums";
+import { ApartmentTypeId, ApartmentTypeLabel, TowerLabel, ZoneInventoryNote, ZoneLabel } from "@/data/urbanization/enums";
+import { phase1Zones } from "@/data/urbanization/zones";
 import { ZoneId, UnitStatus, LotPosition, TowerFloorKind } from "@/data/urbanization/enums";
 import { lotPlanImage, lotMeasuredPlanImage } from "@/data/urbanization/assets";
 import { getAssetUrl } from "@/utils/assets";
@@ -489,6 +490,8 @@ export interface UrbanizationUnit {
   floorName?: string;
   floorId?: string;
   apartmentTypeId?: string;
+  /** Nombre de la tipología, del catálogo de etiquetas. */
+  apartmentTypeName?: string;
 
   // Comercial & Atributos:
   code: string;
@@ -513,6 +516,38 @@ export interface UrbanizationUnit {
  * ternarios con los nombres escritos a mano, que además daba por hecho que las
  * zonas con lotes eran exactamente dos.
  */
+/**
+ * Una pestaña del inventario. El panel no puede deducir el orden de las zonas
+ * a partir de las unidades: `getUrbanizationUnitsData` recorre las manzanas en
+ * orden alfabético (K…N son de la Zona 2, O…R de la Zona 1), así que la
+ * primera zona que aparece no es la primera del proyecto. El orden lo declara
+ * el dominio en `phase1Zones` y viaja por aquí.
+ */
+export interface UrbanizationZoneTab {
+  id: ZoneId;
+  name: string;
+}
+
+/**
+ * Las zonas que tienen inventario, en el orden del recorrido. Se deriva de las
+ * mismas unidades, así que una zona sin nada vendible no genera pestaña vacía.
+ *
+ * Recibe las unidades ya cargadas para no repetir la consulta: quien pinta las
+ * pestañas es la misma página que pinta el inventario.
+ */
+export async function getUrbanizationZoneTabs(
+  units?: UrbanizationUnit[],
+): Promise<UrbanizationZoneTab[]> {
+  const source = units ?? (await getUrbanizationUnitsData());
+  const withInventory = new Set(
+    source.map((u) => u.zoneId).filter((id): id is ZoneId => id !== null),
+  );
+
+  return phase1Zones
+    .filter((zone) => withInventory.has(zone.id))
+    .map((zone) => ({ id: zone.id, name: zoneInventoryName(zone.id) }));
+}
+
 const zoneInventoryName = (zoneId: ZoneId | undefined): string => {
   if (!zoneId) return "Sin zona asignada";
   const note = ZoneInventoryNote[zoneId];
@@ -607,6 +642,9 @@ export async function getUrbanizationUnitsData(): Promise<UrbanizationUnit[]> {
           floorName,
           floorId: floor.id,
           apartmentTypeId: unit.apartmentTypeId,
+          apartmentTypeName: unit.apartmentTypeId
+            ? ApartmentTypeLabel[unit.apartmentTypeId as ApartmentTypeId]
+            : undefined,
           code: `${towerName} · Depa ${unit.identifier}`,
           identifier: unit.identifier,
           type: isTerrace ? "Área Común" : "Departamento Flat",

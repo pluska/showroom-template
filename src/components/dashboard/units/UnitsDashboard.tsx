@@ -10,22 +10,16 @@ import {
   AlertTriangle,
   ExternalLink,
   User as UserIcon,
-  Maximize2,
   Building2,
   MapPin,
-  Compass,
   Layers,
-  ChevronRight,
   Eye,
-  Bed,
-  Bath,
-  Edit,
-  X,
-  Sparkles,
-  Download,
-  Filter,
 } from "lucide-react";
-import { UrbanizationUnit, updateUrbanizationUnitState } from "@/app/actions/units";
+import {
+  UrbanizationUnit,
+  UrbanizationZoneTab,
+  updateUrbanizationUnitState,
+} from "@/app/actions/units";
 
 interface User {
   id: string;
@@ -36,28 +30,32 @@ interface User {
 
 interface UnitsDashboardProps {
   initialUnits: UrbanizationUnit[];
+  /** Las zonas con inventario, en el orden del proyecto. Ver getUrbanizationZoneTabs. */
+  initialZones: UrbanizationZoneTab[];
   currentUser: User;
 }
 
-type ZoneTab = "zone-1" | "zone-2" | "zone-3";
 type ViewMode = "grid" | "table" | "kanban";
 
 export default function UnitsDashboard({
   initialUnits,
+  initialZones,
   currentUser,
 }: UnitsDashboardProps) {
   const [units, setUnits] = useState<UrbanizationUnit[]>(initialUnits);
-  const [activeZone, setActiveZone] = useState<ZoneTab>("zone-1");
+  // Sin zonas no hay nada que pintar; con una sola, la fila de pestañas se
+  // oculta más abajo en vez de mostrar una pestaña única e inútil.
+  const [activeZone, setActiveZone] = useState<string>(initialZones[0]?.id ?? "");
   const [activeView, setActiveView] = useState<ViewMode>("grid");
 
-  // Filtros secundarios para Lotes (Zonas 1 y 2)
-  const [selectedBlock, setSelectedBlock] = useState<string>("ALL"); // "ALL", "mz-k", etc.
-  const [selectedPosition, setSelectedPosition] = useState<string>("ALL"); // "ALL", "Esquinera", "Medianera"
+  // Filtros de lote. Aplican en cualquier zona que tenga lotes.
+  const [selectedBlock, setSelectedBlock] = useState<string>("ALL");
+  const [selectedPosition, setSelectedPosition] = useState<string>("ALL");
 
-  // Filtros secundarios para Torres (Zona 3)
-  const [selectedTower, setSelectedTower] = useState<string>("ALL"); // "ALL", "tower-a", "tower-b", "tower-c"
-  const [selectedFloorLevel, setSelectedFloorLevel] = useState<string>("ALL"); // "ALL", "1", "2", "3", "4", "5", "6"
-  const [selectedApartmentType, setSelectedApartmentType] = useState<string>("ALL"); // "ALL", "depa-1", etc.
+  // Filtros de departamento. Aplican en cualquier zona que tenga torres.
+  const [selectedTower, setSelectedTower] = useState<string>("ALL");
+  const [selectedFloorLevel, setSelectedFloorLevel] = useState<string>("ALL");
+  const [selectedApartmentType, setSelectedApartmentType] = useState<string>("ALL");
 
   // Filtros generales
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL"); // "ALL", "AVAILABLE", "RESERVED", "SOLD"
@@ -86,7 +84,7 @@ export default function UnitsDashboard({
   const isSupervisor = currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN";
 
   // Cambio de zona limpia filtros secundarios
-  const handleZoneChange = (zone: ZoneTab) => {
+  const handleZoneChange = (zone: string) => {
     setActiveZone(zone);
     setSelectedBlock("ALL");
     setSelectedPosition("ALL");
@@ -101,14 +99,16 @@ export default function UnitsDashboard({
       // 1. Filtro de Zona
       if (u.zoneId !== activeZone) return false;
 
-      // 2. Filtros para Zonas de Lotes (Zona 1 y Zona 2)
-      if (activeZone === "zone-1" || activeZone === "zone-2") {
+      // 2. Filtros de lote. Se aplican a la unidad por lo que ES, no por la
+      //    zona en la que cae: una zona mixta —lotes y torres a la vez— filtra
+      //    cada mitad con lo suyo sin necesitar un caso aparte.
+      if (u.kind === "lot") {
         if (selectedBlock !== "ALL" && u.blockId !== selectedBlock) return false;
         if (selectedPosition !== "ALL" && u.lotPosition !== selectedPosition) return false;
       }
 
-      // 3. Filtros para Zona de Torres (Zona 3)
-      if (activeZone === "zone-3") {
+      // 3. Filtros de departamento
+      if (u.kind === "apartment") {
         if (selectedTower !== "ALL" && u.towerId !== selectedTower) return false;
         if (selectedFloorLevel !== "ALL" && String(u.floorLevel) !== selectedFloorLevel) return false;
         if (selectedApartmentType !== "ALL" && u.apartmentTypeId !== selectedApartmentType) return false;
@@ -143,41 +143,127 @@ export default function UnitsDashboard({
     searchQuery,
   ]);
 
-  // Contadores globales por zona
+  // ---------------------------------------------------------------------------
+  // Todo lo que sigue sale del inventario, no de listas escritas a mano.
+  //
+  // Antes esto eran cinco catálogos duplicados en el componente —zonas,
+  // manzanas, torres, pisos y tipologías, cada uno con su conteo— que nada
+  // obligaba a mantener al día. Un lote nuevo en `lots.ts` aparecía en la
+  // grilla pero no cambiaba el "(15)" del botón de su manzana, y el desajuste
+  // no daba ningún error: solo un número mal en la pantalla desde la que se
+  // vende.
+  // ---------------------------------------------------------------------------
+
+  /** Unidades de la zona activa, base de todos los selectores de abajo. */
+  const unitsInZone = useMemo(
+    () => units.filter((u) => u.zoneId === activeZone),
+    [units, activeZone],
+  );
+
+  // Contadores globales de la zona activa
   const zoneStats = useMemo(() => {
-    const forZone = units.filter((u) => u.zoneId === activeZone);
-    const available = forZone.filter((u) => u.state === "AVAILABLE").length;
-    const reserved = forZone.filter((u) => u.state === "RESERVED").length;
-    const sold = forZone.filter((u) => u.state === "SOLD").length;
+    const available = unitsInZone.filter((u) => u.state === "AVAILABLE").length;
+    const reserved = unitsInZone.filter((u) => u.state === "RESERVED").length;
+    const sold = unitsInZone.filter((u) => u.state === "SOLD").length;
     return {
-      total: forZone.length,
+      total: unitsInZone.length,
       available,
       reserved,
       sold,
-      percentageSold: forZone.length > 0 ? Math.round(((sold + reserved) / forZone.length) * 100) : 0,
+      percentageSold:
+        unitsInZone.length > 0 ? Math.round(((sold + reserved) / unitsInZone.length) * 100) : 0,
     };
-  }, [units, activeZone]);
+  }, [unitsInZone]);
 
-  // Opciones de Manzanas disponibles para la zona actual
-  const availableBlocks = useMemo(() => {
-    if (activeZone === "zone-1") {
-      return [
-        { id: "mz-o", letter: "Mz. O", count: 15 },
-        { id: "mz-p", letter: "Mz. P", count: 14 },
-        { id: "mz-q", letter: "Mz. Q", count: 28 },
-        { id: "mz-r", letter: "Mz. R", count: 12 },
-      ];
+  /** Qué se vende en la zona activa. Decide qué filtros tiene sentido pintar. */
+  const zoneHasLots = useMemo(() => unitsInZone.some((u) => u.kind === "lot"), [unitsInZone]);
+  const zoneHasApartments = useMemo(
+    () => unitsInZone.some((u) => u.kind === "apartment"),
+    [unitsInZone],
+  );
+
+  /**
+   * Agrupa las unidades de la zona por una clave y devuelve las opciones en el
+   * orden en que aparecen —que es el del dominio, porque así las arma la
+   * consulta— con su conteo real.
+   */
+  const optionsFrom = (
+    source: UrbanizationUnit[],
+    key: (u: UrbanizationUnit) => string | undefined,
+    label: (u: UrbanizationUnit) => string,
+    sort?: (a: string, b: string) => number,
+  ): { id: string; label: string; count: number }[] => {
+    const found = new Map<string, { id: string; label: string; count: number }>();
+    for (const unit of source) {
+      const id = key(unit);
+      if (!id) continue;
+      const existing = found.get(id);
+      if (existing) existing.count += 1;
+      else found.set(id, { id, label: label(unit), count: 1 });
     }
-    if (activeZone === "zone-2") {
-      return [
-        { id: "mz-k", letter: "Mz. K", count: 16 },
-        { id: "mz-l", letter: "Mz. L", count: 18 },
-        { id: "mz-m", letter: "Mz. M", count: 16 },
-        { id: "mz-n", letter: "Mz. N", count: 14 },
-      ];
+    const options = [...found.values()];
+    return sort ? options.sort((a, b) => sort(a.id, b.id)) : options;
+  };
+
+  const availableBlocks = useMemo(
+    () =>
+      optionsFrom(
+        unitsInZone,
+        (u) => u.blockId,
+        (u) => `Mz. ${u.blockLetter ?? u.blockId}`,
+        (a, b) => a.localeCompare(b),
+      ),
+    [unitsInZone],
+  );
+
+  const availableTowers = useMemo(
+    () => optionsFrom(unitsInZone, (u) => u.towerId, (u) => u.towerName ?? u.towerId ?? ""),
+    [unitsInZone],
+  );
+
+  const availableApartmentTypes = useMemo(
+    () =>
+      optionsFrom(
+        unitsInZone,
+        (u) => u.apartmentTypeId,
+        (u) => u.apartmentTypeName ?? u.apartmentTypeId ?? "",
+        (a, b) => a.localeCompare(b),
+      ),
+    [unitsInZone],
+  );
+
+  /** Pisos con departamentos, de menor a mayor. Las terrazas no tienen nivel. */
+  const availableFloorLevels = useMemo(() => {
+    const levels = new Set<number>();
+    for (const unit of unitsInZone) {
+      if (unit.kind === "apartment" && typeof unit.floorLevel === "number") {
+        levels.add(unit.floorLevel);
+      }
     }
-    return [];
-  }, [activeZone]);
+    return [...levels].sort((a, b) => a - b);
+  }, [unitsInZone]);
+
+  /** El resumen que va bajo el nombre de cada pestaña: "Manzanas K, L (30)". */
+  const zoneSummaries = useMemo(() => {
+    const summary = new Map<string, { detail: string; total: number; kind: "lot" | "apartment" }>();
+    for (const zone of initialZones) {
+      const inZone = units.filter((u) => u.zoneId === zone.id);
+      if (inZone.length === 0) continue;
+
+      const blocks = [...new Set(inZone.map((u) => u.blockLetter).filter(Boolean))].sort();
+      const towers = [...new Set(inZone.map((u) => u.towerName).filter(Boolean))];
+      const parts: string[] = [];
+      if (blocks.length) parts.push(`Manzanas ${blocks.join(", ")}`);
+      if (towers.length) parts.push(towers.join(", "));
+
+      summary.set(zone.id, {
+        detail: parts.join(" · ") || "Sin desglose",
+        total: inZone.length,
+        kind: inZone.some((u) => u.kind === "apartment") ? "apartment" : "lot",
+      });
+    }
+    return summary;
+  }, [units, initialZones]);
 
   // Cambio rápido de estado desde Grilla o Tabla
   const handleQuickStatusChange = async (
@@ -328,88 +414,55 @@ export default function UnitsDashboard({
       </div>
 
       {/* 1. Selector Principal de Zonas */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <button
-          onClick={() => handleZoneChange("zone-1")}
-          className={`flex-1 flex items-center justify-between p-4 rounded-2xl border transition-all ${
-            activeZone === "zone-1"
-              ? "bg-white border-brand-orange ring-2 ring-brand-orange/20 shadow-md"
-              : "bg-white/70 hover:bg-white border-base-200 hover:border-gray-300"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                activeZone === "zone-1" ? "bg-brand-orange text-white" : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div className="text-left">
-              <div className="font-bold text-gray-900 text-base font-primary">Zona 1 · Lotes</div>
-              <div className="text-xs text-gray-500 font-secondary">Manzanas O, P, Q, R (69 Lotes)</div>
-            </div>
-          </div>
-          <span className="badge bg-base-200 text-gray-700 font-bold border-0">69 lotes</span>
-        </button>
-
-        <button
-          onClick={() => handleZoneChange("zone-2")}
-          className={`flex-1 flex items-center justify-between p-4 rounded-2xl border transition-all ${
-            activeZone === "zone-2"
-              ? "bg-white border-brand-orange ring-2 ring-brand-orange/20 shadow-md"
-              : "bg-white/70 hover:bg-white border-base-200 hover:border-gray-300"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                activeZone === "zone-2" ? "bg-brand-orange text-white" : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              <Compass className="w-5 h-5" />
-            </div>
-            <div className="text-left">
-              <div className="font-bold text-gray-900 text-base font-primary">Zona 2 · Lotes</div>
-              <div className="text-xs text-gray-500 font-secondary">Manzanas K, L, M, N (64 Lotes)</div>
-            </div>
-          </div>
-          <span className="badge bg-base-200 text-gray-700 font-bold border-0">64 lotes</span>
-        </button>
-
-        <button
-          onClick={() => handleZoneChange("zone-3")}
-          className={`flex-1 flex items-center justify-between p-4 rounded-2xl border transition-all ${
-            activeZone === "zone-3"
-              ? "bg-white border-brand-orange ring-2 ring-brand-orange/20 shadow-md"
-              : "bg-white/70 hover:bg-white border-base-200 hover:border-gray-300"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                activeZone === "zone-3" ? "bg-brand-orange text-white" : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              <Building2 className="w-5 h-5" />
-            </div>
-            <div className="text-left">
-              <div className="font-bold text-gray-900 text-base font-primary">Zona 3 · Torres</div>
-              <div className="text-xs text-gray-500 font-secondary">Torres A, B, C (60 Departamentos)</div>
-            </div>
-          </div>
-          <span className="badge bg-base-200 text-gray-700 font-bold border-0">60 depas</span>
-        </button>
-      </div>
+      {initialZones.length > 1 && (
+        <div className="flex flex-col sm:flex-row gap-3">
+          {initialZones.map((zone) => {
+            const summary = zoneSummaries.get(zone.id);
+            const isActive = activeZone === zone.id;
+            const ZoneIcon = summary?.kind === "apartment" ? Building2 : MapPin;
+            return (
+              <button
+                key={zone.id}
+                onClick={() => handleZoneChange(zone.id)}
+                className={`flex-1 flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                  isActive
+                    ? "bg-white border-brand-orange ring-2 ring-brand-orange/20 shadow-md"
+                    : "bg-white/70 hover:bg-white border-base-200 hover:border-gray-300"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                      isActive ? "bg-brand-orange text-white" : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    <ZoneIcon className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-gray-900 text-base font-primary">{zone.name}</div>
+                    <div className="text-xs text-gray-500 font-secondary">
+                      {summary?.detail}
+                    </div>
+                  </div>
+                </div>
+                <span className="badge bg-base-200 text-gray-700 font-bold border-0 shrink-0">
+                  {summary?.total ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* 2. Filtros Contextuales y Barra de Control */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-base-200 flex flex-col gap-4">
-        {/* Filtros específicos según Zona */}
-        {(activeZone === "zone-1" || activeZone === "zone-2") && (
+        {/* Filtros de lote. Salen cuando la zona TIENE lotes, no cuando es una
+            zona concreta: una zona mixta pinta los dos juegos. */}
+        {zoneHasLots && (
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center gap-1.5 mr-2">
-                <Layers className="w-4 h-4 text-brand-orange" /> Manzanas (Plantas):
+                <Layers className="w-4 h-4 text-brand-orange" /> Manzanas:
               </span>
               <button
                 onClick={() => setSelectedBlock("ALL")}
@@ -431,7 +484,7 @@ export default function UnitsDashboard({
                       : "btn-ghost text-gray-600 hover:bg-gray-100"
                   }`}
                 >
-                  {b.letter} ({b.count})
+                  {b.label} ({b.count})
                 </button>
               ))}
             </div>
@@ -450,8 +503,8 @@ export default function UnitsDashboard({
           </div>
         )}
 
-        {/* Filtros específicos para Torres (Zona 3) */}
-        {activeZone === "zone-3" && (
+        {/* Filtros de departamento */}
+        {zoneHasApartments && (
           <div className="flex flex-col gap-4 pb-4 border-b border-gray-100">
             {/* Paso 1: Selector de Torre */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -466,38 +519,21 @@ export default function UnitsDashboard({
                     : "btn-ghost text-gray-600 hover:bg-gray-100"
                 }`}
               >
-                Todas las Torres (60)
+                Todas las Torres ({availableTowers.reduce((n, tw) => n + tw.count, 0)})
               </button>
-              <button
-                onClick={() => setSelectedTower("tower-a")}
-                className={`btn btn-sm rounded-xl font-medium ${
-                  selectedTower === "tower-a"
-                    ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
-                    : "btn-ghost text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                Torre A (20)
-              </button>
-              <button
-                onClick={() => setSelectedTower("tower-b")}
-                className={`btn btn-sm rounded-xl font-medium ${
-                  selectedTower === "tower-b"
-                    ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
-                    : "btn-ghost text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                Torre B (20)
-              </button>
-              <button
-                onClick={() => setSelectedTower("tower-c")}
-                className={`btn btn-sm rounded-xl font-medium ${
-                  selectedTower === "tower-c"
-                    ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
-                    : "btn-ghost text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                Torre C (20)
-              </button>
+              {availableTowers.map((tw) => (
+                <button
+                  key={tw.id}
+                  onClick={() => setSelectedTower(tw.id)}
+                  className={`btn btn-sm rounded-xl font-medium ${
+                    selectedTower === tw.id
+                      ? "bg-brand-orange text-white hover:bg-brand-dark-orange border-none shadow-xs"
+                      : "btn-ghost text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {tw.label} ({tw.count})
+                </button>
+              ))}
             </div>
 
             {/* Paso 2: Selector de Piso / Planta y Tipología */}
@@ -514,7 +550,7 @@ export default function UnitsDashboard({
                 >
                   Todos
                 </button>
-                {[1, 2, 3, 4, 5].map((lvl) => (
+                {availableFloorLevels.map((lvl) => (
                   <button
                     key={lvl}
                     onClick={() => setSelectedFloorLevel(String(lvl))}
@@ -536,10 +572,11 @@ export default function UnitsDashboard({
                   onChange={(e) => setSelectedApartmentType(e.target.value)}
                 >
                   <option value="ALL">Todas las Tipologías</option>
-                  <option value="depa-1">Tipología 01 (Frente Izq)</option>
-                  <option value="depa-2">Tipología 02 (Frente Der)</option>
-                  <option value="depa-3">Tipología 03 (Fondo Der)</option>
-                  <option value="depa-4">Tipología 04 (Fondo Izq)</option>
+                  {availableApartmentTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label} ({type.count})
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
