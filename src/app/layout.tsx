@@ -7,6 +7,7 @@ import StoreInitializer from "@/components/layout/StoreInitializer";
 import FloorEntryTransition from "@/components/layout/FloorEntryTransition";
 import UseLandscape from "@/components/layout/UseLandscape";
 import ForcedLandscapeWrapper from "@/components/layout/ForcedLandscapeWrapper";
+import AnalyticsTracker from "@/components/AnalyticsTracker";
 import { getFloorsData } from "@/app/actions/units";
 import { getBuildingFacesData } from "@/app/actions/building";
 import { type Floor } from "@/data/floors";
@@ -56,6 +57,8 @@ export default async function RootLayout({
         <UseLandscape />
         <ForcedLandscapeWrapper>
           <FloorEntryTransition />
+          {/* Alimenta el módulo de Métricas: registra la visita y su duración. */}
+          <AnalyticsTracker />
           {children}
         </ForcedLandscapeWrapper>
       </body>
