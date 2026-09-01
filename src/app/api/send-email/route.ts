@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import ContactEmail from '@/components/emails/ContactEmail';
 import { NextResponse } from 'next/server';
+import config from '@/config/config';
 
 export async function POST(request: Request) {
   try {
@@ -23,8 +24,8 @@ export async function POST(request: Request) {
 
     // Send email using Resend
     const { data, error } = await resend.emails.send({
-      from: 'Santa Fe 190 <no-reply@kayen.work>', // Updated sender address
-      to: ['ventas@kayeninmobiliaria.com'], // Updated recipient
+      from: config.resend.fromNoReply,
+      to: [config.company.email],
       subject: `Nueva Solicitud: ${nombres} ${apellido}`,
       react: ContactEmail({
         nombres,
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
         documentNumber,
         contactPreference,
         horario,
-        project: project || 'Santa Fe 190',
+        project: project || config.company.buildingName,
         mensaje
       }),
     });

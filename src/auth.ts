@@ -3,7 +3,6 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { getDb } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -17,12 +16,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!credentials?.email || !credentials?.password) return null;
 
         const db = await getDb();
-        const userArr = await db.select().from(users).where(eq(users.email, credentials.email as string));
+        // El correo se normaliza igual que al crear/editar el usuario (ver
+        // src/app/actions/user.ts); si no, quien se registró como "Ana@X.com"
+        // no podría entrar escribiendo "ana@x.com".
+        const email = (credentials.email as string).trim().toLowerCase();
+        const userArr = await db.select().from(users).where(eq(users.email, email));
         const user = userArr[0];
 
         if (!user || user.deletedAt) return null;
 
-        const passwordsMatch = bcrypt.compareSync(credentials.password as string, user.password);
+        // Import perezoso: bcryptjs solo hace falta al validar la contraseña.
+        const { compareSync } = await import('bcryptjs');
+        const passwordsMatch = compareSync(credentials.password as string, user.password);
         
         if (passwordsMatch) {
           return {
