@@ -18,7 +18,17 @@ import {
   Box,
   Calendar,
   History,
+  FileText,
 } from "lucide-react";
+
+import config from "@/config/config";
+
+// El logotipo del panel pinta la última palabra del nombre en el color de
+// marca. Se parte aquí y no en config para que un nombre de una sola palabra
+// siga funcionando: en ese caso la cabecera queda entera en color.
+const nameParts = config.company.buildingName.trim().split(/\s+/);
+const buildingNameTail = nameParts.length > 1 ? nameParts.pop()! : nameParts[0];
+const buildingNameHead = nameParts.length > 0 && nameParts.join(" ") !== buildingNameTail ? nameParts.join(" ") : "";
 
 interface SidebarProps {
   role: string;
@@ -33,6 +43,7 @@ export default function Sidebar({ role }: SidebarProps) {
   const navigation = [
     { name: "Métricas", href: "/dashboard", icon: LayoutDashboard, visible: true },
     { name: "Calendario", href: "/dashboard/calendar", icon: Calendar, visible: true },
+    { name: "Contenido", href: "/dashboard/content", icon: FileText, visible: isAdmin },
     { name: "Usuarios", href: "/dashboard/users", icon: Users, visible: isAdmin },
     { name: "Unidades", href: "/dashboard/units", icon: Building, visible: true },
     { name: "Multimedia", href: "/dashboard/media", icon: ImageIcon, visible: true },
@@ -54,12 +65,12 @@ export default function Sidebar({ role }: SidebarProps) {
       <div className="px-6 h-[72px] border-b flex items-center gap-3">
         <img 
           src="/identity/identity_logo_ISOTIPO.png" 
-          alt="Santa Fe Logo" 
+          alt={`${config.company.buildingName} Logo`}
           className="w-8 h-8 object-contain drop-shadow-[0_0_8px_rgba(245,156,29,0.25)]"
         />
         <h2 className="text-lg font-bold font-primary tracking-wide text-base-content flex items-center">
-          <span className="opacity-70 font-light mr-1">Santa</span>
-          <span className="font-extrabold text-brand-orange">Fe</span>
+          <span className="opacity-70 font-light mr-1">{buildingNameHead}</span>
+          <span className="font-extrabold text-brand-orange">{buildingNameTail}</span>
         </h2>
       </div>
       <div className="flex-1 overflow-y-auto py-4">

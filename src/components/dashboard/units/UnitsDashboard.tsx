@@ -34,6 +34,8 @@ import {
   deleteUnit,
   updateUnitState,
 } from "@/app/actions/units";
+import { uploadBrochure } from "@/app/actions/brochure";
+import config from "@/config/config";
 
 // Floor and Unit Typings
 interface Floor {
@@ -173,7 +175,36 @@ export default function UnitsDashboard({
     }
   }, [selectedUnit, activeDetailTab]);
 
-  const getAbsoluteBrochureUrl = (url: string | null) => {
+  const [uploadingUnitBrochure, setUploadingUnitBrochure] = useState(false);
+  const [unitBrochureError, setUnitBrochureError] = useState("");
+
+  // Sube un PDF y lo deja activo para la unidad abierta. uploadBrochure ya
+  // valida el rol y el formato en el servidor; aquí solo se refleja el estado.
+  const handleUploadUnitBrochure = async (file: File) => {
+    if (!selectedUnit) return;
+    setUnitBrochureError("");
+    setUploadingUnitBrochure(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", `Brochure ${selectedUnit.identifier}`);
+      formData.append("type", "UNIT");
+      formData.append("unitId", selectedUnit.id);
+
+      await uploadBrochure(formData);
+
+      const res = await fetch(`/api/brochure/active?unitId=${selectedUnit.id}`);
+      const data: any = await res.json();
+      setUnitBrochureUrl(data?.url || null);
+    } catch (err: any) {
+      console.error("Error subiendo el brochure de la unidad:", err);
+      setUnitBrochureError(err?.message || "No se pudo subir el brochure.");
+    } finally {
+      setUploadingUnitBrochure(false);
+    }
+  };
+
+  const getAbsoluteAssetUrl = (url: string | null) => {
     if (!url) return "";
     const resolved = getAssetUrl(url);
     if (resolved.startsWith("http")) return resolved;
@@ -184,9 +215,11 @@ export default function UnitsDashboard({
   };
 
   const [copied, setCopied] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [imageCopied, setImageCopied] = useState(false);
 
   const handleCopyLink = () => {
-    const absoluteUrl = getAbsoluteBrochureUrl(unitBrochureUrl);
+    const absoluteUrl = getAbsoluteAssetUrl(unitBrochureUrl);
     if (!absoluteUrl) return;
     navigator.clipboard.writeText(absoluteUrl)
       .then(() => {
@@ -470,8 +503,25 @@ export default function UnitsDashboard({
     }
   };
 
+  const getCompactUnitStyle = (state: string) => {
+    switch (state) {
+      case "AVAILABLE":
+        return "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 shadow-sm";
+      case "RESERVED":
+        return "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-500 hover:text-white hover:border-amber-500 shadow-sm";
+      case "SOLD":
+        return "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-500 hover:text-white hover:border-rose-500 shadow-sm";
+      case "COMMON_AREA":
+        return "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-500 hover:text-white hover:border-blue-500 shadow-sm";
+      default:
+        return "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-500 hover:text-white shadow-sm";
+    }
+  };
+
   const openDetailsModal = (unit: Unit) => {
     setSelectedUnit(unit);
+    setSelectedImageUrl(null);
+    setImageCopied(false);
     // For non-SuperAdmin roles, auto-select the first tab that has content
     if (!isSuperAdmin) {
       if (unit.photosFurnished.length > 0) setActiveDetailTab("furnished");
@@ -520,13 +570,13 @@ export default function UnitsDashboard({
       )}
 
       {/* Header controls */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-base-100/70 dark:bg-base-100/70 backdrop-blur-md p-4 rounded-xl shadow-sm border border-base-200 dark:border-base-300 dark:border-base-200">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white backdrop-blur-md p-4 rounded-xl shadow-sm border border-base-200">
         <div>
           <h1 className="text-2xl font-bold font-primary text-brand-orange flex items-center gap-2">
             <Building className="w-6 h-6 text-brand-orange animate-pulse" />
             Módulo de Unidades y Plantas
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm font-secondary">
+          <p className="text-gray-500 text-sm font-secondary">
             Gestiona los pisos, planos y estados de las unidades inmobiliarias.
           </p>
         </div>
@@ -538,7 +588,7 @@ export default function UnitsDashboard({
             <button
               onClick={() => setActiveView("grid")}
               className={`join-item btn btn-sm border-none shadow-none hover:bg-base-300 ${
-                activeView === "grid" ? "bg-white dark:bg-base-100 text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"
+                activeView === "grid" ? "bg-white text-brand-orange font-bold" : "text-gray-500"
               }`}
             >
               <LayoutGrid className="w-4 h-4 mr-1" />
@@ -547,7 +597,7 @@ export default function UnitsDashboard({
             <button
               onClick={() => setActiveView("table")}
               className={`join-item btn btn-sm border-none shadow-none hover:bg-base-300 ${
-                activeView === "table" ? "bg-white dark:bg-base-100 text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"
+                activeView === "table" ? "bg-white text-brand-orange font-bold" : "text-gray-500"
               }`}
             >
               <TableProperties className="w-4 h-4 mr-1" />
@@ -556,7 +606,7 @@ export default function UnitsDashboard({
             <button
               onClick={() => setActiveView("kanban")}
               className={`join-item btn btn-sm border-none shadow-none hover:bg-base-300 ${
-                activeView === "kanban" ? "bg-white dark:bg-base-100 text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"
+                activeView === "kanban" ? "bg-white text-brand-orange font-bold" : "text-gray-500"
               }`}
             >
               <Kanban className="w-4 h-4 mr-1" />
@@ -591,10 +641,10 @@ export default function UnitsDashboard({
       {activeView === "grid" && (
         <div className="flex flex-col gap-4">
           {floors.length === 0 ? (
-            <div className="card bg-base-100 border border-base-200 dark:border-base-300 dark:border-base-200 shadow-sm p-12 text-center flex flex-col items-center">
+            <div className="card bg-base-100 border border-base-200 shadow-sm p-12 text-center flex flex-col items-center">
               <Building className="w-16 h-16 text-gray-300 mb-4" />
-              <h3 className="text-lg font-bold font-primary text-gray-700 dark:text-gray-200">No hay plantas</h3>
-              <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm mt-2 max-w-lg">
+              <h3 className="text-lg font-bold font-primary text-gray-700">No hay plantas</h3>
+              <p className="text-gray-500 text-sm mt-2 max-w-lg">
                 Actualmente no hay plantas creadas en tu proyecto. Haz click en añadir planta para empezar a configurar las plantas.
               </p>
               {isSuperAdmin && (
@@ -607,142 +657,107 @@ export default function UnitsDashboard({
           ) : (
             floors.map((floor) => {
               const floorUnits = units.filter((u) => u.floorId === floor.id);
-              const isExpanded = selectedFloorId === floor.id;
 
               return (
                 <div
                   key={floor.id}
-                  className="card bg-base-100 border border-base-200 dark:border-base-300 dark:border-base-200 shadow-sm overflow-hidden"
+                  className="card bg-base-100 border border-base-200 shadow-sm overflow-hidden"
                 >
-                  {/* Floor Header Bar */}
-                  <div
-                    onClick={() => setSelectedFloorId(isExpanded ? null : floor.id)}
-                    className="p-4 flex justify-between items-center cursor-pointer hover:bg-base-100/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-lg bg-brand-orange/10 text-brand-orange">
+                  {/* Floor Row: Flex layout aligning floor details on the left, units center-right, and controls far right */}
+                  <div className="p-4 flex flex-col md:flex-row md:items-center gap-4 min-h-[76px]">
+                    
+                    {/* Left: Floor Info */}
+                    <div className="flex items-center gap-3 min-w-[200px] md:max-w-[240px] shrink-0">
+                      <div className="p-2.5 rounded-lg bg-brand-orange/10 text-brand-orange shrink-0">
                         <Building className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="font-bold font-primary text-gray-800 dark:text-gray-100 text-lg">
+                        <h3 className="font-bold font-primary text-gray-800 text-base leading-tight">
                           {floor.name}
                         </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
-                          Nivel: {floor.level} • Tipo: {floor.type} • {floorUnits.length} Unidades
+                        <p className="text-[11px] text-gray-500 mt-0.5 whitespace-nowrap">
+                          Nivel: {floor.level} • Tipo: {floor.type}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      {isSuperAdmin && (
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={(e) => openEditFloorModal(floor, e)}
-                            className="btn btn-ghost btn-circle btn-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-brand-orange"
-                            title="Editar Planta"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => confirmDeleteFloor(floor, e)}
-                            className="btn btn-ghost btn-circle btn-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-error"
-                            title="Eliminar Planta"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                      {isExpanded ? (
-                        <ChevronDown className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                      ) : (
-                        <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Expanded Floor Units Grid */}
-                  {isExpanded && (
-                    <div className="bg-base-200/50 dark:bg-base-300/50 p-6 border-t border-base-200 dark:border-base-300 dark:border-base-200 animate-slide-down">
+                    {/* Center/Right: Units flex-wrap row */}
+                    <div className="flex flex-row flex-wrap gap-2 items-center flex-1 py-1">
                       {floorUnits.length === 0 ? (
-                        <div className="text-center py-8 flex flex-col items-center">
-                          <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm">
-                            No existe unidades asignadas a esta planta. Haz click en añadir unidad, para empezar a configurar tus unidades.
-                          </p>
-                          {isSuperAdmin && (
-                            <button
-                              onClick={() => openAddUnitModal(floor.id)}
-                              className="btn btn-sm btn-outline border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white mt-4"
-                            >
-                              <Plus className="w-3.5 h-3.5 mr-1" />
-                              Añadir Unidad
-                            </button>
-                          )}
-                        </div>
+                        <span className="text-xs text-gray-400 italic">
+                          Sin unidades asignadas
+                        </span>
                       ) : (
-                        <div>
-                          <div className="flex justify-between items-center mb-4">
-                            <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300">Departamentos</h4>
+                        floorUnits.map((unit) => (
+                          <div
+                            key={unit.id}
+                            onClick={() => openDetailsModal(unit)}
+                            className={`px-3 py-1.5 rounded-lg border font-semibold font-primary text-xs transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center justify-center min-w-[64px] text-center relative group ${getCompactUnitStyle(
+                              unit.state
+                            )}`}
+                          >
+                            <span>{unit.identifier}</span>
+                            
+                            {/* Floating controls on hover (Super Admin Only) */}
                             {isSuperAdmin && (
-                              <button
-                                onClick={() => openAddUnitModal(floor.id)}
-                                className="btn btn-xs btn-outline border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white"
+                              <div
+                                className="absolute -top-3.5 -right-2 hidden group-hover:flex items-center gap-0.5 bg-white border border-base-300 rounded-md p-0.5 shadow-md z-10 animate-fade-in"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <Plus className="w-3 h-3 mr-1" />
-                                Añadir Unidad
-                              </button>
+                                <button
+                                  onClick={(e) => openEditUnitModal(unit, e)}
+                                  className="p-1 rounded text-gray-500 hover:text-brand-orange hover:bg-base-100 transition-colors"
+                                  title="Editar Unidad"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={(e) => confirmDeleteUnit(unit, e)}
+                                  className="p-1 rounded text-gray-500 hover:text-error hover:bg-base-100 transition-colors"
+                                  title="Eliminar Unidad"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
                             )}
                           </div>
+                        ))
+                      )}
 
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                            {floorUnits.map((unit) => (
-                              <div
-                                key={unit.id}
-                                onClick={() => openDetailsModal(unit)}
-                                className="card bg-white dark:bg-base-100 p-4 shadow-sm border border-base-200 dark:border-base-300 dark:border-base-200 hover:shadow-md cursor-pointer transition-all hover:-translate-y-0.5 relative group"
-                              >
-                                {isSuperAdmin && (
-                                  <div
-                                    className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <button
-                                      onClick={(e) => openEditUnitModal(unit, e)}
-                                      className="p-1 rounded bg-base-100 border border-base-200 dark:border-base-300 dark:border-base-200 text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-brand-orange hover:scale-105"
-                                    >
-                                      <Edit className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={(e) => confirmDeleteUnit(unit, e)}
-                                      className="p-1 rounded bg-base-100 border border-base-200 dark:border-base-300 dark:border-base-200 text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-error hover:scale-105"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
-                                <div className="text-center">
-                                  <span className="font-bold text-gray-900 dark:text-white text-base font-primary block">
-                                    {unit.identifier}
-                                  </span>
-                                  <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500 block uppercase tracking-wider mt-0.5">
-                                    {unit.type || "Flat"}
-                                  </span>
-                                  <div className="mt-3">
-                                    <span
-                                      className={`badge badge-sm border ${getStateColor(
-                                        unit.state
-                                      )}`}
-                                    >
-                                      {getStateLabel(unit.state)}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                      {/* Add Unit dotted placeholder button inside the row */}
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => openAddUnitModal(floor.id)}
+                          className="border border-dashed border-gray-300 hover:border-brand-orange hover:text-brand-orange text-gray-400 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                          title="Añadir Unidad"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Añadir</span>
+                        </button>
                       )}
                     </div>
-                  )}
+
+                    {/* Far Right: Floor Admin Controls */}
+                    {isSuperAdmin && (
+                      <div className="flex items-center gap-1 border-t md:border-t-0 md:border-l pt-2 md:pt-0 md:pl-3 border-base-200 shrink-0 ml-auto justify-end">
+                        <button
+                          onClick={(e) => openEditFloorModal(floor, e)}
+                          className="btn btn-ghost btn-circle btn-sm text-gray-500 hover:text-brand-orange hover:bg-base-200"
+                          title="Editar Planta"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => confirmDeleteFloor(floor, e)}
+                          className="btn btn-ghost btn-circle btn-sm text-gray-500 hover:text-error hover:bg-base-200"
+                          title="Eliminar Planta"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                  </div>
                 </div>
               );
             })
@@ -754,16 +769,16 @@ export default function UnitsDashboard({
           2. TABLE VIEW - Full searchable report
           ---------------------------------------------------- */}
       {activeView === "table" && (
-        <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-base-200 dark:border-base-300 dark:border-base-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-base-200 overflow-hidden">
           {filteredUnits.length === 0 ? (
-            <div className="p-12 text-center text-gray-500 dark:text-gray-400 dark:text-gray-500">
+            <div className="p-12 text-center text-gray-500">
               No se encontraron unidades con los criterios especificados.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="table table-md w-full">
                 <thead>
-                  <tr className="bg-base-200/50 dark:bg-base-300/50">
+                  <tr className="bg-base-200/50">
                     <th>Unidad</th>
                     <th>Planta</th>
                     <th>Tipo Planta</th>
@@ -784,10 +799,10 @@ export default function UnitsDashboard({
                         onClick={() => openDetailsModal(unit)}
                         className="hover:bg-base-100/50 cursor-pointer transition-colors"
                       >
-                        <td className="font-bold text-gray-900 dark:text-white">{unit.identifier}</td>
+                        <td className="font-bold text-gray-900">{unit.identifier}</td>
                         <td>{floor ? floor.name : "N/A"}</td>
                         <td>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">{floor ? floor.type : "N/A"}</span>
+                          <span className="text-xs text-gray-500">{floor ? floor.type : "N/A"}</span>
                         </td>
                         <td>{unit.type || "Flat"}</td>
                         <td>{unit.bedrooms}</td>
@@ -803,13 +818,13 @@ export default function UnitsDashboard({
                             <div className="flex gap-1 justify-end">
                               <button
                                 onClick={(e) => openEditUnitModal(unit, e)}
-                                className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-brand-orange"
+                                className="btn btn-ghost btn-xs text-gray-500 hover:text-brand-orange"
                               >
                                 <Edit className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={(e) => confirmDeleteUnit(unit, e)}
-                                className="btn btn-ghost btn-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 hover:text-error"
+                                className="btn btn-ghost btn-xs text-gray-500 hover:text-error"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -846,10 +861,10 @@ export default function UnitsDashboard({
                   const unitId = e.dataTransfer.getData("text/plain");
                   if (unitId) handleStatusChange(unitId, columnState);
                 }}
-                className="bg-base-200 p-4 rounded-xl border border-base-300 dark:border-base-200 min-h-[500px] flex flex-col gap-4"
+                className="bg-base-200 p-4 rounded-xl border border-base-300 min-h-[500px] flex flex-col gap-4"
               >
                 {/* Column Header */}
-                <div className="flex justify-between items-center border-b pb-2 border-base-300 dark:border-base-200">
+                <div className="flex justify-between items-center border-b pb-2 border-base-300">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${
                       columnState === "AVAILABLE"
@@ -860,7 +875,7 @@ export default function UnitsDashboard({
                         ? "bg-error"
                         : "bg-info"
                     }`} />
-                    <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">
+                    <h3 className="font-bold text-gray-800 text-sm">
                       {getStateLabel(columnState)}
                     </h3>
                   </div>
@@ -870,7 +885,7 @@ export default function UnitsDashboard({
                 {/* Column Body Cards */}
                 <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
                   {columnUnits.length === 0 ? (
-                    <div className="text-center text-xs text-gray-400 dark:text-gray-500 py-12 border-2 border-dashed border-base-300 dark:border-base-200 rounded-lg">
+                    <div className="text-center text-xs text-gray-400 py-12 border-2 border-dashed border-base-300 rounded-lg">
                       Arrastra unidades aquí
                     </div>
                   ) : (
@@ -884,33 +899,33 @@ export default function UnitsDashboard({
                             e.dataTransfer.setData("text/plain", unit.id);
                           }}
                           onClick={() => openDetailsModal(unit)}
-                          className="bg-white dark:bg-base-100 p-4 rounded-lg shadow-sm border border-base-300 dark:border-base-200 hover:shadow cursor-grab active:cursor-grabbing hover:border-brand-orange/30 group transition-all"
+                          className="bg-white p-4 rounded-lg shadow-sm border border-base-300 hover:shadow cursor-grab active:cursor-grabbing hover:border-brand-orange/30 group transition-all"
                         >
                           <div className="flex justify-between items-start gap-2">
                             <div>
-                              <span className="font-bold text-gray-900 dark:text-white font-primary text-sm block">
+                              <span className="font-bold text-gray-900 font-primary text-sm block">
                                 {unit.identifier}
                               </span>
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                              <span className="text-[10px] text-gray-500">
                                 {floor ? floor.name : "Nivel N/A"}
                               </span>
                             </div>
-                            <span className="text-[10px] bg-base-100 border px-1.5 py-0.5 rounded text-gray-500 dark:text-gray-400 dark:text-gray-500 font-medium">
+                            <span className="text-[10px] bg-base-100 border px-1.5 py-0.5 rounded text-gray-500 font-medium">
                               {unit.type || "Flat"}
                             </span>
                           </div>
 
-                          <div className="flex justify-between items-center mt-4 text-[10px] text-gray-400 dark:text-gray-500 border-t pt-2">
+                          <div className="flex justify-between items-center mt-4 text-[10px] text-gray-400 border-t pt-2">
                             <span className="flex items-center gap-0.5">
-                              <Bed className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                              <Bed className="w-3 h-3 text-gray-400" />
                               {unit.bedrooms}
                             </span>
                             <span className="flex items-center gap-0.5">
-                              <Bath className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                              <Bath className="w-3 h-3 text-gray-400" />
                               {unit.bathrooms}
                             </span>
                             <span className="flex items-center gap-0.5">
-                              <Maximize className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+                              <Maximize className="w-3 h-3 text-gray-400" />
                               {unit.areaSqm} m²
                             </span>
                           </div>
@@ -930,14 +945,14 @@ export default function UnitsDashboard({
           ---------------------------------------------------- */}
       {isFloorModalOpen && isSuperAdmin && (
         <div className="modal modal-open z-50">
-          <div className="modal-box max-w-md bg-white dark:bg-base-100">
+          <div className="modal-box max-w-md bg-white">
             <button
               onClick={() => setIsFloorModalOpen(false)}
               className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
             >
               <X className="w-4 h-4" />
             </button>
-            <h3 className="font-bold text-lg font-primary text-gray-900 dark:text-white border-b pb-2 mb-4">
+            <h3 className="font-bold text-lg font-primary text-gray-900 border-b pb-2 mb-4">
               {floorEditing ? "Editar Planta" : "Añadir Nueva Planta"}
             </h3>
 
@@ -1029,12 +1044,12 @@ export default function UnitsDashboard({
           ---------------------------------------------------- */}
       {isDeleteFloorConfirmOpen && floorToDelete && isSuperAdmin && (
         <div className="modal modal-open z-50">
-          <div className="modal-box bg-white dark:bg-base-100">
+          <div className="modal-box bg-white">
             <h3 className="font-bold text-lg text-error flex items-center gap-2">
               <AlertTriangle className="w-6 h-6" />
               ¿Confirmar eliminación de planta?
             </h3>
-            <p className="py-4 text-gray-600 dark:text-gray-300 text-sm">
+            <p className="py-4 text-gray-600 text-sm">
               Estás a punto de eliminar la planta <strong>{floorToDelete.name}</strong>. Esta acción
               no se puede deshacer y se ejecuta mediante borrado lógico (soft delete).
             </p>
@@ -1083,14 +1098,14 @@ export default function UnitsDashboard({
           ---------------------------------------------------- */}
       {isUnitModalOpen && isSuperAdmin && (
         <div className="modal modal-open z-50">
-          <div className="modal-box max-w-xl bg-white dark:bg-base-100 max-h-[90vh] overflow-y-auto">
+          <div className="modal-box max-w-xl bg-white max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsUnitModalOpen(false)}
               className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
             >
               <X className="w-4 h-4" />
             </button>
-            <h3 className="font-bold text-lg font-primary text-gray-900 dark:text-white border-b pb-2 mb-4">
+            <h3 className="font-bold text-lg font-primary text-gray-900 border-b pb-2 mb-4">
               {unitEditing ? `Editar Unidad: ${unitEditing.identifier}` : "Añadir Nueva Unidad"}
             </h3>
 
@@ -1201,14 +1216,14 @@ export default function UnitsDashboard({
               </div>
 
               {/* Photo lists inputs */}
-              <div className="border-t border-base-200 dark:border-base-300 dark:border-base-200 pt-3 space-y-4">
-                <h4 className="font-bold text-xs text-gray-700 dark:text-gray-200 uppercase tracking-wider">
+              <div className="border-t border-base-200 pt-3 space-y-4">
+                <h4 className="font-bold text-xs text-gray-700 uppercase tracking-wider">
                   Galerías de Fotos (Ingresar una URL por línea)
                 </h4>
 
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text font-semibold text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                    <span className="label-text font-semibold text-[11px] text-gray-500">
                       Fotos de Unidad Amoblada
                     </span>
                   </label>
@@ -1225,7 +1240,7 @@ export default function UnitsDashboard({
 
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text font-semibold text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                    <span className="label-text font-semibold text-[11px] text-gray-500">
                       Fotos de Unidad Sin Amoblar
                     </span>
                   </label>
@@ -1242,7 +1257,7 @@ export default function UnitsDashboard({
 
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text font-semibold text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                    <span className="label-text font-semibold text-[11px] text-gray-500">
                       Planos / Medidas
                     </span>
                   </label>
@@ -1257,7 +1272,7 @@ export default function UnitsDashboard({
 
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text font-semibold text-[11px] text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                    <span className="label-text font-semibold text-[11px] text-gray-500">
                       Fotos Vista Balcón
                     </span>
                   </label>
@@ -1300,12 +1315,12 @@ export default function UnitsDashboard({
           ---------------------------------------------------- */}
       {isDeleteUnitConfirmOpen && unitToDelete && isSuperAdmin && (
         <div className="modal modal-open z-50">
-          <div className="modal-box bg-white dark:bg-base-100">
+          <div className="modal-box bg-white">
             <h3 className="font-bold text-lg text-error flex items-center gap-2">
               <Trash2 className="w-6 h-6" />
               ¿Confirmar eliminación de unidad?
             </h3>
-            <p className="py-4 text-gray-600 dark:text-gray-300 text-sm">
+            <p className="py-4 text-gray-600 text-sm">
               ¿Estás seguro de que deseas eliminar la unidad{" "}
               <strong>{unitToDelete.identifier}</strong>? Se aplicará borrado lógico (soft delete).
             </p>
@@ -1340,7 +1355,7 @@ export default function UnitsDashboard({
           ---------------------------------------------------- */}
       {isDetailsModalOpen && selectedUnit && (
         <div className="modal modal-open z-[60]">
-          <div className="modal-box max-w-4xl bg-white dark:bg-base-100 max-h-[90vh] overflow-y-auto p-6">
+          <div className="modal-box max-w-4xl bg-white max-h-[90vh] overflow-y-auto p-6">
             {/* Header info */}
             <div className="flex justify-between items-start gap-4 border-b pb-4 mb-4">
               <div className="flex items-center gap-3">
@@ -1348,10 +1363,10 @@ export default function UnitsDashboard({
                   <Compass className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-xl font-primary text-gray-900 dark:text-white">
+                  <h3 className="font-bold text-xl font-primary text-gray-900">
                     Detalles de Unidad: {selectedUnit.identifier}
                   </h3>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500">
+                  <span className="text-xs text-gray-500">
                     Tipo: {selectedUnit.type || "Flat"} • Planta:{" "}
                     {floors.find((f) => f.id === selectedUnit.floorId)?.name || "N/A"}
                   </span>
@@ -1370,28 +1385,28 @@ export default function UnitsDashboard({
 
             {/* Quick Specs Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-base-200/50 dark:bg-base-300/50 p-3 rounded-lg border text-center">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 block uppercase">Estado</span>
+              <div className="bg-base-200/50 p-3 rounded-lg border text-center">
+                <span className="text-[10px] text-gray-400 block uppercase">Estado</span>
                 <span className={`badge badge-sm border font-bold mt-1 ${getStateColor(selectedUnit.state)}`}>
                   {getStateLabel(selectedUnit.state)}
                 </span>
               </div>
-              <div className="bg-base-200/50 dark:bg-base-300/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 block uppercase">Dormitorios</span>
-                <span className="font-bold text-gray-800 dark:text-gray-100 text-sm flex items-center gap-1 mt-0.5">
-                  <Bed className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" /> {selectedUnit.bedrooms || 0}
+              <div className="bg-base-200/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
+                <span className="text-[10px] text-gray-400 block uppercase">Dormitorios</span>
+                <span className="font-bold text-gray-800 text-sm flex items-center gap-1 mt-0.5">
+                  <Bed className="w-4 h-4 text-gray-500" /> {selectedUnit.bedrooms || 0}
                 </span>
               </div>
-              <div className="bg-base-200/50 dark:bg-base-300/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 block uppercase">Baños</span>
-                <span className="font-bold text-gray-800 dark:text-gray-100 text-sm flex items-center gap-1 mt-0.5">
-                  <Bath className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" /> {selectedUnit.bathrooms || 0}
+              <div className="bg-base-200/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
+                <span className="text-[10px] text-gray-400 block uppercase">Baños</span>
+                <span className="font-bold text-gray-800 text-sm flex items-center gap-1 mt-0.5">
+                  <Bath className="w-4 h-4 text-gray-500" /> {selectedUnit.bathrooms || 0}
                 </span>
               </div>
-              <div className="bg-base-200/50 dark:bg-base-300/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 block uppercase">Área Total</span>
-                <span className="font-bold text-gray-800 dark:text-gray-100 text-sm flex items-center gap-1 mt-0.5">
-                  <Maximize className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" /> {selectedUnit.areaSqm || 0} m²
+              <div className="bg-base-200/50 p-3 rounded-lg border text-center flex flex-col justify-center items-center">
+                <span className="text-[10px] text-gray-400 block uppercase">Área Total</span>
+                <span className="font-bold text-gray-800 text-sm flex items-center gap-1 mt-0.5">
+                  <Maximize className="w-4 h-4 text-gray-500" /> {selectedUnit.areaSqm || 0} m²
                 </span>
               </div>
             </div>
@@ -1400,138 +1415,329 @@ export default function UnitsDashboard({
             <div className="tabs tabs-bordered w-full mb-4">
               {(isSuperAdmin || selectedUnit.photosFurnished.length > 0) && (
                 <button
-                  onClick={() => setActiveDetailTab("furnished")}
-                  className={`tab ${activeDetailTab === "furnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                  onClick={() => {
+                    setActiveDetailTab("furnished");
+                    setSelectedImageUrl(null);
+                    setImageCopied(false);
+                  }}
+                  className={`tab ${activeDetailTab === "furnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500"}`}
                 >
                   Amoblado
                 </button>
               )}
               {(isSuperAdmin || selectedUnit.photosUnfurnished.length > 0) && (
                 <button
-                  onClick={() => setActiveDetailTab("unfurnished")}
-                  className={`tab ${activeDetailTab === "unfurnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                  onClick={() => {
+                    setActiveDetailTab("unfurnished");
+                    setSelectedImageUrl(null);
+                    setImageCopied(false);
+                  }}
+                  className={`tab ${activeDetailTab === "unfurnished" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500"}`}
                 >
                   Sin Amoblar
                 </button>
               )}
               {(isSuperAdmin || selectedUnit.photosPlans.length > 0) && (
                 <button
-                  onClick={() => setActiveDetailTab("plans")}
-                  className={`tab ${activeDetailTab === "plans" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                  onClick={() => {
+                    setActiveDetailTab("plans");
+                    setSelectedImageUrl(null);
+                    setImageCopied(false);
+                  }}
+                  className={`tab ${activeDetailTab === "plans" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500"}`}
                 >
                   Planos / Medidas
                 </button>
               )}
               {(isSuperAdmin || selectedUnit.photosBalcony.length > 0) && (
                 <button
-                  onClick={() => setActiveDetailTab("balcony")}
-                  className={`tab ${activeDetailTab === "balcony" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                  onClick={() => {
+                    setActiveDetailTab("balcony");
+                    setSelectedImageUrl(null);
+                    setImageCopied(false);
+                  }}
+                  className={`tab ${activeDetailTab === "balcony" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500"}`}
                 >
                   Vista Balcón
                 </button>
               )}
               {(isSuperAdmin || selectedUnit.gallery.length > 0) && (
                 <button
-                  onClick={() => setActiveDetailTab("gallery")}
-                  className={`tab ${activeDetailTab === "gallery" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                  onClick={() => {
+                    setActiveDetailTab("gallery");
+                    setSelectedImageUrl(null);
+                    setImageCopied(false);
+                  }}
+                  className={`tab ${activeDetailTab === "gallery" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500"}`}
                 >
                   Galería
                 </button>
               )}
               <button
-                onClick={() => setActiveDetailTab("brochure")}
-                className={`tab ${activeDetailTab === "brochure" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500 dark:text-gray-400 dark:text-gray-500"}`}
+                onClick={() => {
+                  setActiveDetailTab("brochure");
+                  setSelectedImageUrl(null);
+                  setImageCopied(false);
+                }}
+                className={`tab ${activeDetailTab === "brochure" ? "tab-active border-brand-orange text-brand-orange font-bold" : "text-gray-500"}`}
               >
                 Brochure
               </button>
             </div>
 
             {/* Media Tabs Body */}
-            <div className="bg-base-200 p-4 rounded-xl min-h-[300px] border flex flex-col justify-center items-center">
-              {/* Tab: Furnished */}
-              {activeDetailTab === "furnished" && (
-                <div className="w-full">
-                  {selectedUnit.photosFurnished.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay fotos de la unidad amoblada disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedUnit.photosFurnished.map((url, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
-                          <img src={url} alt={`Amoblado ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Unfurnished */}
-              {activeDetailTab === "unfurnished" && (
-                <div className="w-full">
-                  {selectedUnit.photosUnfurnished.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay fotos sin amoblar disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedUnit.photosUnfurnished.map((url, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
-                          <img src={url} alt={`Sin Amoblar ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Plans */}
-              {activeDetailTab === "plans" && (
-                <div className="w-full">
-                  {selectedUnit.photosPlans.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay imágenes de planos o medidas disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-4 max-w-xl mx-auto">
-                      {selectedUnit.photosPlans.map((url, idx) => (
-                        <div key={idx} className="relative aspect-auto rounded-lg overflow-hidden border border-base-300 dark:border-base-200 bg-white dark:bg-base-100 p-2">
-                          <img src={url} alt={`Planos ${idx + 1}`} className="max-h-[400px] mx-auto object-contain" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Balcony */}
-              {activeDetailTab === "balcony" && (
-                <div className="w-full">
-                  {selectedUnit.photosBalcony.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay fotos de la vista del balcón disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedUnit.photosBalcony.map((url, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
-                          <img src={url} alt={`Balcón ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Gallery */}
-              {activeDetailTab === "gallery" && (
-                <div className="w-full">
-                  {selectedUnit.gallery.length === 0 ? (
-                    <div className="text-gray-400 dark:text-gray-500 text-center py-12">No hay imágenes de galería disponibles.</div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {selectedUnit.gallery.map((url, idx) => (
-                        <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-base-300 dark:border-base-200 shadow-sm bg-white dark:bg-base-100">
-                          <img src={url} alt={`Galería ${idx + 1}`} className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="bg-base-200 p-4 rounded-xl min-h-[300px] border flex flex-col justify-center items-center w-full">
+               {/* Tab: Furnished */}
+               {activeDetailTab === "furnished" && (
+                 <div className="w-full">
+                   {selectedUnit.photosFurnished.length === 0 ? (
+                     <div className="text-gray-400 text-center py-12">No hay fotos de la unidad amoblada disponibles.</div>
+                   ) : (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       {selectedUnit.photosFurnished.map((url, idx) => {
+                         const isSelected = selectedImageUrl === url;
+                         return (
+                           <div
+                             key={idx}
+                             onClick={() => {
+                               if (selectedImageUrl === url) {
+                                 setSelectedImageUrl(null);
+                                 setImageCopied(false);
+                               } else {
+                                 setSelectedImageUrl(url);
+                                 setImageCopied(false);
+                               }
+                             }}
+                             className={`relative aspect-video rounded-lg overflow-hidden border bg-white cursor-pointer transition-all duration-300 ${
+                               isSelected
+                                 ? "border-brand-orange ring-2 ring-brand-orange/40 shadow-[0_0_15px_rgba(245,156,29,0.45)] scale-[0.98]"
+                                 : "border-base-300 shadow-sm hover:border-brand-orange/40"
+                             }`}
+                           >
+                             <img src={getAssetUrl(url)} alt={`Amoblado ${idx + 1}`} className="w-full h-full object-cover" />
+                           </div>
+                         );
+                       })}
+                     </div>
+                   )}
+                 </div>
+               )}
+ 
+               {/* Tab: Unfurnished */}
+               {activeDetailTab === "unfurnished" && (
+                 <div className="w-full">
+                   {selectedUnit.photosUnfurnished.length === 0 ? (
+                     <div className="text-gray-400 text-center py-12">No hay fotos sin amoblar disponibles.</div>
+                   ) : (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       {selectedUnit.photosUnfurnished.map((url, idx) => {
+                         const isSelected = selectedImageUrl === url;
+                         return (
+                           <div
+                             key={idx}
+                             onClick={() => {
+                               if (selectedImageUrl === url) {
+                                 setSelectedImageUrl(null);
+                                 setImageCopied(false);
+                               } else {
+                                 setSelectedImageUrl(url);
+                                 setImageCopied(false);
+                               }
+                             }}
+                             className={`relative aspect-video rounded-lg overflow-hidden border bg-white cursor-pointer transition-all duration-300 ${
+                               isSelected
+                                 ? "border-brand-orange ring-2 ring-brand-orange/40 shadow-[0_0_15px_rgba(245,156,29,0.45)] scale-[0.98]"
+                                 : "border-base-300 shadow-sm hover:border-brand-orange/40"
+                             }`}
+                           >
+                             <img src={getAssetUrl(url)} alt={`Sin Amoblar ${idx + 1}`} className="w-full h-full object-cover" />
+                           </div>
+                         );
+                       })}
+                     </div>
+                   )}
+                 </div>
+               )}
+ 
+               {/* Tab: Plans */}
+               {activeDetailTab === "plans" && (
+                 <div className="w-full">
+                   {selectedUnit.photosPlans.length === 0 ? (
+                     <div className="text-gray-400 text-center py-12">No hay imágenes de planos o medidas disponibles.</div>
+                   ) : (
+                     <div className="grid grid-cols-1 gap-4 max-w-xl mx-auto">
+                       {selectedUnit.photosPlans.map((url, idx) => {
+                         const isSelected = selectedImageUrl === url;
+                         return (
+                           <div
+                             key={idx}
+                             onClick={() => {
+                               if (selectedImageUrl === url) {
+                                 setSelectedImageUrl(null);
+                                 setImageCopied(false);
+                               } else {
+                                 setSelectedImageUrl(url);
+                                 setImageCopied(false);
+                               }
+                             }}
+                             className={`relative aspect-auto rounded-lg overflow-hidden border bg-white p-2 cursor-pointer transition-all duration-300 ${
+                               isSelected
+                                 ? "border-brand-orange ring-2 ring-brand-orange/40 shadow-[0_0_15px_rgba(245,156,29,0.45)] scale-[0.98]"
+                                 : "border-base-300"
+                             }`}
+                           >
+                             <img src={getAssetUrl(url)} alt={`Planos ${idx + 1}`} className="max-h-[400px] mx-auto object-contain" />
+                           </div>
+                         );
+                       })}
+                     </div>
+                   )}
+                 </div>
+               )}
+ 
+               {/* Tab: Balcony */}
+               {activeDetailTab === "balcony" && (
+                 <div className="w-full">
+                   {selectedUnit.photosBalcony.length === 0 ? (
+                     <div className="text-gray-400 text-center py-12">No hay fotos de la vista del balcón disponibles.</div>
+                   ) : (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       {selectedUnit.photosBalcony.map((url, idx) => {
+                         const isSelected = selectedImageUrl === url;
+                         return (
+                           <div
+                             key={idx}
+                             onClick={() => {
+                               if (selectedImageUrl === url) {
+                                 setSelectedImageUrl(null);
+                                 setImageCopied(false);
+                               } else {
+                                 setSelectedImageUrl(url);
+                                 setImageCopied(false);
+                               }
+                             }}
+                             className={`relative aspect-video rounded-lg overflow-hidden border bg-white cursor-pointer transition-all duration-300 ${
+                               isSelected
+                                 ? "border-brand-orange ring-2 ring-brand-orange/40 shadow-[0_0_15px_rgba(245,156,29,0.45)] scale-[0.98]"
+                                 : "border-base-300 shadow-sm hover:border-brand-orange/40"
+                             }`}
+                           >
+                             <img src={getAssetUrl(url)} alt={`Balcón ${idx + 1}`} className="w-full h-full object-cover" />
+                           </div>
+                         );
+                       })}
+                     </div>
+                   )}
+                 </div>
+               )}
+ 
+               {/* Tab: Gallery */}
+               {activeDetailTab === "gallery" && (
+                 <div className="w-full">
+                   {selectedUnit.gallery.length === 0 ? (
+                     <div className="text-gray-400 text-center py-12">No hay imágenes de galería disponibles.</div>
+                   ) : (
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       {selectedUnit.gallery.map((url, idx) => {
+                         const isSelected = selectedImageUrl === url;
+                         return (
+                           <div
+                             key={idx}
+                             onClick={() => {
+                               if (selectedImageUrl === url) {
+                                 setSelectedImageUrl(null);
+                                 setImageCopied(false);
+                               } else {
+                                 setSelectedImageUrl(url);
+                                 setImageCopied(false);
+                               }
+                             }}
+                             className={`relative aspect-video rounded-lg overflow-hidden border bg-white cursor-pointer transition-all duration-300 ${
+                               isSelected
+                                 ? "border-brand-orange ring-2 ring-brand-orange/40 shadow-[0_0_15px_rgba(245,156,29,0.45)] scale-[0.98]"
+                                 : "border-base-300 shadow-sm hover:border-brand-orange/40"
+                             }`}
+                           >
+                             <img src={getAssetUrl(url)} alt={`Galería ${idx + 1}`} className="w-full h-full object-cover" />
+                           </div>
+                         );
+                       })}
+                     </div>
+                   )}
+                 </div>
+               )}
+ 
+               {/* Selected Image Sharing panel (rendered at the bottom of all image tabs) */}
+               {activeDetailTab !== "brochure" && selectedImageUrl && (
+                 <div className="mt-4 p-4 bg-orange-50 border border-brand-orange/20 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-4 animate-fade-in w-full text-left">
+                   <div className="flex items-center gap-2.5">
+                     <div className="w-10 h-10 rounded-lg overflow-hidden border border-brand-orange/20 bg-white shrink-0 shadow-sm">
+                       <img src={getAssetUrl(selectedImageUrl)} className="w-full h-full object-cover" alt="Selected thumbnail" />
+                     </div>
+                     <div>
+                       <p className="text-xs font-bold text-gray-700 font-primary">Compartir imagen seleccionada</p>
+                       <p className="text-[10px] text-gray-500 font-secondary mt-0.5 truncate max-w-[150px] sm:max-w-[200px]">
+                         {selectedImageUrl.split("/").pop()}
+                       </p>
+                     </div>
+                   </div>
+                   
+                   <div className="flex flex-wrap gap-2 justify-end w-full sm:w-auto">
+                     {/* Copy Image Link */}
+                     <button
+                       onClick={() => {
+                         const absUrl = getAbsoluteAssetUrl(selectedImageUrl);
+                         navigator.clipboard.writeText(absUrl)
+                           .then(() => {
+                             setImageCopied(true);
+                             setTimeout(() => setImageCopied(false), 2000);
+                           });
+                       }}
+                       className="btn btn-sm btn-outline btn-neutral flex items-center gap-1.5"
+                     >
+                       {imageCopied ? (
+                         <>
+                           <Check className="w-3.5 h-3.5 text-success" />
+                           Copiado
+                         </>
+                       ) : (
+                         <>
+                           <Copy className="w-3.5 h-3.5" />
+                           Copiar Enlace
+                         </>
+                       )}
+                     </button>
+ 
+                     {/* WhatsApp Share Image */}
+                     <a
+                       href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                         `Hola, te comparto esta imagen de la unidad ${selectedUnit.identifier} del Showroom ${config.company.buildingName}: ${getAbsoluteAssetUrl(selectedImageUrl)}`
+                       )}`}
+                       target="_blank"
+                       rel="noreferrer"
+                       className="btn btn-sm btn-success text-white flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 border-0"
+                     >
+                       <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24" fill="currentColor">
+                         <path d="M12.031 2c-5.516 0-9.99 4.474-9.99 9.99 0 1.764.46 3.48 1.332 4.988l-1.42 5.185 5.306-1.392c1.458.796 3.1 1.21 4.773 1.21 5.515 0 9.99-4.473 9.99-9.99 0-5.517-4.475-9.99-9.99-9.99zM17.56 16.5c-.244.688-1.22 1.272-1.688 1.353-.424.073-.974.135-2.775-.61-2.3-1.01-3.765-3.344-3.882-3.498-.117-.153-.94-1.25-.94-2.385 0-1.135.59-1.692.802-1.92.213-.227.467-.285.62-.285.155 0 .31.002.443.01.144.007.337-.054.527.404.195.474.67 1.637.728 1.75.058.115.097.25.02.404-.076.155-.115.253-.23.385-.115.132-.244.296-.348.398-.115.11-.237.23-.102.463.136.232.6 1.012 1.288 1.625.886.79 1.632 1.032 1.862 1.15.23.116.364.098.5-.058.136-.156.59-.688.748-.92.16-.233.32-.195.538-.115.22.08 1.388.654 1.63.774.24.12.4.18.46.28.06.1.06.58-.184 1.268z" />
+                       </svg>
+                       WhatsApp
+                     </a>
+ 
+                     {/* Email Share Image */}
+                     <a
+                       href={`mailto:?subject=${encodeURIComponent(
+                         `Imagen de la unidad ${selectedUnit.identifier} - Showroom ${config.company.buildingName}`
+                       )}&body=${encodeURIComponent(
+                         `Hola,\n\nTe comparto esta imagen de la unidad ${selectedUnit.identifier} del Showroom ${config.company.buildingName}:\n\n${getAbsoluteAssetUrl(selectedImageUrl)}\n\nSaludos!`
+                       )}`}
+                       className="btn btn-sm btn-outline btn-neutral flex items-center gap-1.5"
+                     >
+                       <Mail className="w-3.5 h-3.5" />
+                       Correo
+                     </a>
+                   </div>
+                 </div>
+               )}
 
               {/* Tab: Brochure */}
               {activeDetailTab === "brochure" && (
@@ -1542,10 +1748,44 @@ export default function UnitsDashboard({
                       <p className="text-sm text-gray-500 mt-2">Cargando brochure...</p>
                     </div>
                   ) : !unitBrochureUrl ? (
-                    <div className="text-gray-400 dark:text-gray-500">Brochure digital no configurado para esta unidad.</div>
+                    <div className="w-full max-w-md flex flex-col items-center gap-4">
+                      <div className="text-gray-400">Brochure digital no configurado para esta unidad.</div>
+
+                      {/* Carga directa del brochure de esta unidad, para no tener
+                          que ir al módulo Brochure a asociarlo a mano. */}
+                      {isSupervisor && (
+                        <div className="w-full border-2 border-dashed border-base-300 rounded-xl p-5 flex flex-col items-center gap-3 bg-base-100">
+                          <input
+                            id="unit-brochure-input"
+                            type="file"
+                            accept="application/pdf"
+                            className="file-input file-input-bordered file-input-sm w-full"
+                            disabled={uploadingUnitBrochure}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadUnitBrochure(file);
+                              e.target.value = "";
+                            }}
+                          />
+                          {uploadingUnitBrochure ? (
+                            <span className="text-xs text-gray-500 flex items-center gap-2">
+                              <span className="loading loading-spinner loading-xs" />
+                              Subiendo brochure...
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">
+                              Solo PDF. Quedará asociado a la unidad {selectedUnit?.identifier}.
+                            </span>
+                          )}
+                          {unitBrochureError && (
+                            <span className="text-xs text-error">{unitBrochureError}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="w-full max-w-3xl flex flex-col gap-4">
-                      <div className="relative w-full h-[500px] rounded-xl overflow-hidden shadow-md border-2 border-base-300 dark:border-base-200 bg-white">
+                      <div className="relative w-full h-[500px] rounded-xl overflow-hidden shadow-md border-2 border-base-300 bg-white">
                         <iframe
                           src={getAssetUrl(unitBrochureUrl)}
                           className="w-full h-full border-none"
@@ -1584,14 +1824,14 @@ export default function UnitsDashboard({
                         {/* WhatsApp sharing */}
                         <a
                           href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                            `Hola, te comparto el brochure de la unidad ${selectedUnit.identifier} del Showroom Santa Fe: ${getAbsoluteBrochureUrl(unitBrochureUrl)}`
+                            `Hola, te comparto el brochure de la unidad ${selectedUnit.identifier} del Showroom ${config.company.buildingName}: ${getAbsoluteAssetUrl(unitBrochureUrl)}`
                           )}`}
                           target="_blank"
                           rel="noreferrer"
                           className="btn btn-success text-white flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 border-0"
                         >
-                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.966C16.59 1.978 14.12 .953 11.487.953c-5.412 0-9.817 4.358-9.82 9.782-.002 1.742.485 3.442 1.413 4.988l-.947 3.454 3.528-.916c1.558.85 3.111 1.295 4.392 1.295zM17.5 14.39c-.3-.149-1.785-.88-2.062-.98-.277-.101-.479-.149-.68.151-.2.299-.777.98-.952 1.18-.175.2-.35.226-.65.076-.3-.15-1.267-.467-2.414-1.491-.892-.796-1.494-1.78-1.67-2.079-.175-.3-.019-.462.13-.61.135-.133.3-.35.45-.526.15-.175.2-.299.3-.5.1-.2.05-.375-.025-.526-.075-.15-.68-1.637-.932-2.247-.247-.591-.497-.511-.68-.521-.176-.01-.377-.01-.577-.01-.2 0-.527.075-.803.375-.276.3-.1.526-.1.803 0 .278.101.526.2.777.302.277 3.51 5.39 8.52 7.56 1.192.516 2.124.825 2.85 1.055 1.197.38 2.286.326 3.148.196.961-.146 1.785-.726 2.062-1.39.277-.665.277-1.232.193-1.39-.084-.158-.299-.247-.599-.397z"/>
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12.031 2c-5.516 0-9.99 4.474-9.99 9.99 0 1.764.46 3.48 1.332 4.988l-1.42 5.185 5.306-1.392c1.458.796 3.1 1.21 4.773 1.21 5.515 0 9.99-4.473 9.99-9.99 0-5.517-4.475-9.99-9.99-9.99zM17.56 16.5c-.244.688-1.22 1.272-1.688 1.353-.424.073-.974.135-2.775-.61-2.3-1.01-3.765-3.344-3.882-3.498-.117-.153-.94-1.25-.94-2.385 0-1.135.59-1.692.802-1.92.213-.227.467-.285.62-.285.155 0 .31.002.443.01.144.007.337-.054.527.404.195.474.67 1.637.728 1.75.058.115.097.25.02.404-.076.155-.115.253-.23.385-.115.132-.244.296-.348.398-.115.11-.237.23-.102.463.136.232.6 1.012 1.288 1.625.886.79 1.632 1.032 1.862 1.15.23.116.364.098.5-.058.136-.156.59-.688.748-.92.16-.233.32-.195.538-.115.22.08 1.388.654 1.63.774.24.12.4.18.46.28.06.1.06.58-.184 1.268z" />
                           </svg>
                           WhatsApp
                         </a>
@@ -1599,9 +1839,9 @@ export default function UnitsDashboard({
                         {/* Email sharing */}
                         <a
                           href={`mailto:?subject=${encodeURIComponent(
-                            `Brochure de la unidad ${selectedUnit.identifier} - Showroom Santa Fe`
+                            `Brochure de la unidad ${selectedUnit.identifier} - Showroom ${config.company.buildingName}`
                           )}&body=${encodeURIComponent(
-                            `Hola,\n\nTe comparto el brochure de la unidad ${selectedUnit.identifier} del Showroom Santa Fe:\n\n${getAbsoluteBrochureUrl(unitBrochureUrl)}\n\nSaludos!`
+                            `Hola,\n\nTe comparto el brochure de la unidad ${selectedUnit.identifier} del Showroom ${config.company.buildingName}:\n\n${getAbsoluteAssetUrl(unitBrochureUrl)}\n\nSaludos!`
                           )}`}
                           className="btn btn-outline btn-neutral flex items-center gap-2"
                         >
@@ -1618,11 +1858,11 @@ export default function UnitsDashboard({
             {/* Change State dropdown & Super Admin Edit option inside details modal */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-t pt-4 mt-6 gap-4">
               <div className="flex items-center gap-3 w-full sm:w-auto">
-                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 dark:text-gray-500 uppercase">Cambiar Estado:</span>
+                <span className="text-xs font-bold text-gray-500 uppercase">Cambiar Estado:</span>
                 <select
                   value={selectedUnit.state}
                   onChange={(e) => handleStatusChange(selectedUnit.id, e.target.value)}
-                  className="select select-bordered select-sm text-gray-800 dark:text-gray-100"
+                  className="select select-bordered select-sm text-gray-800"
                 >
                   <option value="AVAILABLE">Disponible</option>
                   <option value="RESERVED">Apartado</option>

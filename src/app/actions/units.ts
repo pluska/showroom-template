@@ -1,10 +1,12 @@
 "use server";
 
+import { cache } from "react";
 import { getDb } from "@/lib/db";
 import { floors, units, logs } from "@/lib/db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { floorsData as staticFloorsData } from "@/data/floors";
 
 // Helper to audit actions
 async function logAction(
@@ -38,7 +40,7 @@ export async function getFloors() {
     .orderBy(floors.level);
 }
 
-export async function getFloorsData() {
+export const getFloorsData = cache(async function getFloorsData() {
   let isSuperAdmin = false;
   try {
     const session = await auth();
@@ -62,6 +64,9 @@ export async function getFloorsData() {
     .orderBy(units.identifier);
 
   return allFloors.map(f => {
+    const rawFloorId = f.id.replace('floor_', '');
+    const staticFloor = staticFloorsData.find(sf => sf.id === rawFloorId);
+
     const floorUnits = allUnits
       .filter(u => u.floorId === f.id)
       .filter(u => {
@@ -77,30 +82,24 @@ export async function getFloorsData() {
         
         const coords = u.coordinates as { x?: number; y?: number; path?: string } | null;
         
+        const cleanUnitId = u.id.replace(`unit_${rawFloorId}_`, '');
+        const staticUnit = staticFloor?.units.find(
+          su => su.id === cleanUnitId || su.id === u.identifier || (su.identifier && su.identifier === u.identifier)
+        );
+
+        // El subtítulo sale de `units.type`, no del identificador. Antes había
+        // dos ramas atadas a un proyecto concreto (`identifier === '801'` y
+        // `identifier === 'Terraza'`): en una plantilla eso etiqueta mal las
+        // unidades de cualquier otro edificio que reutilice esos números.
         let subtitle = 'Flat';
         if (u.type === 'STORAGE') {
-          if (u.identifier.startsWith('PB')) {
-            subtitle = `Depósito ${u.identifier.replace('PB ', '')}`;
-          } else if (['101', '102', '103', '104', '105'].includes(u.identifier)) {
-            subtitle = `Estacionamiento ${u.identifier.slice(-1)}`;
-          } else {
-            subtitle = 'Bodega';
-          }
-        } else if (u.identifier === 'Terraza') {
-          subtitle = 'Terraza';
-        } else if (u.identifier === '801') {
+          subtitle = 'Bodega';
+        } else if (u.type === 'DUPLEX') {
+          // Marks the unit as spanning two floors, which is what makes the unit
+          // page show the level selector between its lower and upper plans.
           subtitle = 'Dúplex';
-        }
-
-        let assetId = u.identifier;
-        if (u.identifier.endsWith('01') && u.identifier !== '801') {
-          assetId = 'x01';
-        } else if (u.identifier.endsWith('02') && u.identifier !== '802') {
-          assetId = 'x02';
-        } else if (u.identifier === '801') {
-          assetId = f.level === 9 ? '901' : '801';
-        } else if (u.identifier === 'Terraza') {
-          assetId = '902';
+        } else if (u.type === 'TERRACE') {
+          subtitle = 'Terraza';
         }
 
         return {
@@ -117,21 +116,26 @@ export async function getFloorsData() {
           description: '',
           images: u.gallery ? (u.gallery as string[]) : [],
           tourUrl: u.tourUrl || undefined,
-          assetId,
-          x: coords?.x,
-          y: coords?.y,
-          path: coords?.path,
+          x: coords?.x ?? staticUnit?.x,
+          y: coords?.y ?? staticUnit?.y,
+          path: coords?.path ?? staticUnit?.path,
+          photosFurnished: u.photosFurnished ? (u.photosFurnished as string[]) : [],
+          photosUnfurnished: u.photosUnfurnished ? (u.photosUnfurnished as string[]) : [],
+          photosPlans: u.photosPlans ? (u.photosPlans as string[]) : [],
+          photosBalcony: u.photosBalcony ? (u.photosBalcony as string[]) : [],
+          gallery: u.gallery ? (u.gallery as string[]) : [],
         };
       });
 
     return {
       id: f.id.replace('floor_', ''),
       name: f.name,
+      level: f.level,
       floorPlanImage: f.imagePath || '',
       units: floorUnits,
     };
   });
-}
+});
 
 export async function createFloor(data: {
   name: string;
@@ -396,17 +400,13 @@ export async function updateUnitState(id: string, newState: string) {
     }
   }
 
-  // If we are updating a duplex (units sharing the same identifier across floors), sync their states
   const [updatedUnit] = await db
     .update(units)
     .set({
       state: newState,
       updatedAt: new Date(),
     })
-    .where(and(
-      eq(units.identifier, original.identifier),
-      isNull(units.deletedAt)
-    ))
+    .where(eq(units.id, id))
     .returning();
 
   await logAction(db, session, "UPDATE", "unit", id, {

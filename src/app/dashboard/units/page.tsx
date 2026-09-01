@@ -3,8 +3,6 @@ import { getFloors, getUnits, getLogs } from "@/app/actions/units";
 import UnitsDashboard from "@/components/dashboard/units/UnitsDashboard";
 import { redirect } from "next/navigation";
 
-export const runtime = "edge";
-
 export const metadata = {
   title: "Gestión de Unidades - Dashboard",
 };

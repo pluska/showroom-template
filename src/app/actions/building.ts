@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { buildingFaces } from "@/lib/db/schema";
@@ -45,7 +46,7 @@ function mapDbRowToBuildingFace(row: any): BuildingFace {
     return getAssetUrl(path);
   };
 
-  const face: BuildingFace = {
+  return {
     id: row.id,
     name: row.name,
     dayToNightTransition: resolve(row.dayToNightTransition),
@@ -71,17 +72,6 @@ function mapDbRowToBuildingFace(row: any): BuildingFace {
       }
     }
   };
-
-  // Clean up boundaries so we don't display invalid rotation buttons
-  if (row.order === 1) { // Cara Derecha: No right transition
-    face.day.transitions.toRight = "";
-    face.night.transitions.toRight = "";
-  } else if (row.order === 2) { // Cara Izquierda: No left transition
-    face.day.transitions.toLeft = "";
-    face.night.transitions.toLeft = "";
-  }
-
-  return face;
 }
 
 const defaultFacesSeed = [
@@ -134,7 +124,10 @@ const defaultFacesSeed = [
   }
 ];
 
-export async function getBuildingFacesData(): Promise<BuildingFace[]> {
+// `cache` deduplica la lectura dentro de una misma petición: la llaman varias
+// páginas SSR y sin esto cada render repetía la consulta, que es lo que
+// disparaba el Error 1102 (límite de CPU) en Cloudflare Workers.
+export const getBuildingFacesData = cache(async function getBuildingFacesData(): Promise<BuildingFace[]> {
   const db = await getDb();
   
   let rows = await db
@@ -163,7 +156,7 @@ export async function getBuildingFacesData(): Promise<BuildingFace[]> {
   }
 
   return rows.map(mapDbRowToBuildingFace);
-}
+});
 
 export async function getRawBuildingFaces() {
   const session = await auth();

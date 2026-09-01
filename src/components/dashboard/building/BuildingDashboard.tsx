@@ -64,6 +64,12 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
   const [dayToNightTransition, setDayToNightTransition] = useState("");
   const [nightToDayTransition, setNightToDayTransition] = useState("");
 
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
   const selectedFace = faces.find((f) => f.id === selectedFaceId);
 
   // Reset form when opening create/edit
@@ -167,7 +173,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
       }
     } catch (err) {
       console.error(err);
-      alert("Error al eliminar la cara.");
+      showNotification("error", "Error al eliminar la cara.");
     }
   };
 
@@ -189,7 +195,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
       await reorderBuildingFaces(newFaces.map((f) => f.id));
     } catch (err) {
       console.error(err);
-      alert("Error al guardar el nuevo orden.");
+      showNotification("error", "Error al guardar el nuevo orden.");
     }
   };
 
@@ -234,7 +240,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
     const isImage = value.toLowerCase().match(/\.(jpeg|jpg|gif|png|webp|svg)$/);
 
     return (
-      <div className="border border-base-300/40 rounded-xl p-3 bg-base-200/10 dark:bg-base-200/5 flex flex-col gap-2">
+      <div className="border border-base-300/40 rounded-xl p-3 bg-base-200/10 flex flex-col gap-2">
         <span className="text-xs font-bold text-base-content/60">{label}</span>
         {value ? (
           <div className="relative flex items-center justify-between gap-3 bg-base-100 p-2 rounded-lg border border-base-300/50 text-base-content">
@@ -268,7 +274,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
             />
             <label
               htmlFor={`upload-${label}`}
-              className={`flex items-center justify-center gap-2 border border-dashed border-base-300 hover:border-brand-orange dark:hover:border-brand-orange rounded-lg py-2.5 cursor-pointer text-xs font-semibold hover:text-brand-orange transition-all bg-base-100 hover:bg-base-200/50 dark:bg-base-200/30 text-base-content ${
+              className={`flex items-center justify-center gap-2 border border-dashed border-base-300 hover:border-brand-orange rounded-lg py-2.5 cursor-pointer text-xs font-semibold hover:text-brand-orange transition-all bg-base-100 hover:bg-base-200/50 text-base-content ${
                 uploading ? "opacity-60 pointer-events-none" : ""
               }`}
             >
@@ -349,6 +355,16 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 w-full pb-12 items-start max-w-6xl mx-auto">
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Left side: Horizontal columns & Connectors */}
       <div className="flex-1 flex flex-col gap-6 w-full">
         {/* Header */}
@@ -379,7 +395,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
               <p className="text-sm font-semibold">No se han registrado caras en el edificio.</p>
               <button
                 onClick={() => handleOpenForm()}
-                className="btn btn-outline btn-sm mt-4 text-brand-orange hover:bg-brand-orange hover:border-brand-orange dark:hover:text-white"
+                className="btn btn-outline btn-sm mt-4 text-brand-orange hover:bg-brand-orange hover:border-brand-orange"
               >
                 Crea la primera cara
               </button>
@@ -395,10 +411,10 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
                     {/* Face Column Card */}
                     <div
                       onClick={() => setSelectedFaceId(face.id)}
-                      className={`w-72 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 relative cursor-pointer group shadow-sm bg-base-200/40 dark:bg-base-200/20 hover:bg-base-200/70 dark:hover:bg-base-200/30 ${
+                      className={`w-72 border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 relative cursor-pointer group shadow-sm bg-base-200/40 hover:bg-base-200/70 ${
                         isSelected
-                          ? "border-brand-orange ring-2 ring-brand-orange/20 bg-brand-orange/5 dark:bg-brand-orange/10"
-                          : "border-base-300/80 hover:border-gray-400 dark:hover:border-gray-500"
+                          ? "border-brand-orange ring-2 ring-brand-orange/20 bg-brand-orange/5"
+                          : "border-base-300/80 hover:border-gray-400"
                       }`}
                     >
                       {/* Badge status */}
@@ -407,7 +423,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
                           <span className="badge badge-error text-white text-[10px] px-2 py-0.5 font-bold animate-pulse">Crítico</span>
                         )}
                         {status === "warning" && (
-                          <span className="badge badge-warning text-amber-900 bg-amber-200 border-amber-300 dark:text-amber-300 dark:bg-amber-950/40 dark:border-amber-900/30 text-[10px] px-2 py-0.5 font-bold">Incompleto</span>
+                          <span className="badge badge-warning text-amber-900 bg-amber-200 border-amber-300 text-[10px] px-2 py-0.5 font-bold">Incompleto</span>
                         )}
                         {status === "ok" && (
                           <span className="badge badge-success text-white text-[10px] px-2 py-0.5 font-bold">Listo</span>
@@ -504,7 +520,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
                               e.stopPropagation();
                               handleDelete(face.id);
                             }}
-                            className="btn btn-xs btn-ghost text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-600 font-semibold"
+                            className="btn btn-xs btn-ghost text-red-500 hover:bg-red-50 hover:text-red-600 font-semibold"
                             title="Eliminar"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -561,8 +577,8 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
 
               if (status === "ok") {
                 return (
-                  <div className="flex flex-col items-center justify-center py-8 text-center text-green-600 dark:text-green-400 bg-green-50/30 dark:bg-green-950/20 border border-green-200/50 dark:border-green-800/30 p-4 rounded-xl gap-2 flex-1 shadow-sm">
-                    <CheckCircle2 className="w-12 h-12 text-green-500 dark:text-green-400" />
+                  <div className="flex flex-col items-center justify-center py-8 text-center text-green-600 bg-green-50/30 border border-green-200/50 p-4 rounded-xl gap-2 flex-1 shadow-sm">
+                    <CheckCircle2 className="w-12 h-12 text-green-500" />
                     <p className="text-xs font-bold font-primary">¡Configuración Completa!</p>
                     <p className="text-[10px] text-base-content/60 font-normal">
                       Esta cara cuenta con todos los elementos requeridos y opcionales. El showroom funcionará al 100%.
@@ -574,7 +590,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
               return (
                 <div className="flex flex-col gap-3 overflow-y-auto max-h-[350px]">
                   {faces.length === 1 && (
-                    <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30 rounded-xl text-xs flex gap-2 shadow-xs">
+                    <div className="p-3 bg-blue-50/50 text-blue-700 border border-blue-100 rounded-xl text-xs flex gap-2 shadow-xs">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
                       <div>
                         <p className="font-bold">Info: Edificio de 1 Cara</p>
@@ -589,7 +605,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
                   {critical.map((note, idx) => (
                     <div
                       key={`crit-${idx}`}
-                      className="p-3.5 bg-red-50/50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30 rounded-xl text-xs flex gap-2.5 shadow-xs font-semibold leading-relaxed animate-fade-in"
+                      className="p-3.5 bg-red-50/50 text-red-700 border border-red-100 rounded-xl text-xs flex gap-2.5 shadow-xs font-semibold leading-relaxed animate-fade-in"
                     >
                       <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                       <span>{note}</span>
@@ -600,9 +616,9 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
                   {warnings.map((note, idx) => (
                     <div
                       key={`warn-${idx}`}
-                      className="p-3.5 bg-amber-50/50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30 rounded-xl text-xs flex gap-2.5 font-medium leading-relaxed animate-fade-in shadow-xs"
+                      className="p-3.5 bg-amber-50/50 text-amber-700 border border-amber-100 rounded-xl text-xs flex gap-2.5 font-medium leading-relaxed animate-fade-in shadow-xs"
                     >
-                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                       <span>{note}</span>
                     </div>
                   ))}
@@ -647,7 +663,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
             {/* Modal Body / Form */}
             <form onSubmit={handleSaveFace} className="flex flex-col gap-6 flex-1">
               {formError && (
-                <div className="p-3 bg-red-50/50 dark:bg-red-950/20 text-red-500 dark:text-red-400 border border-red-150 dark:border-red-900/30 rounded-lg text-xs font-bold">
+                <div className="p-3 bg-red-50/50 text-red-500 border border-red-150 rounded-lg text-xs font-bold">
                   {formError}
                 </div>
               )}
@@ -670,7 +686,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
               {/* Grid 2 Columns: Day and Night */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* DAY ASSETS */}
-                <div className="border border-base-300/50 rounded-2xl p-5 flex flex-col gap-4 bg-base-200/20 dark:bg-base-200/5">
+                <div className="border border-base-300/50 rounded-2xl p-5 flex flex-col gap-4 bg-base-200/20">
                   <h3 className="font-bold text-sm text-base-content border-b pb-2 border-base-300/50 flex items-center gap-2">
                     <Sun className="w-4 h-4 text-brand-orange" />
                     Recursos Diurnos (Día)
@@ -703,7 +719,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
                 </div>
 
                 {/* NIGHT ASSETS */}
-                <div className="border border-base-300/50 rounded-2xl p-5 flex flex-col gap-4 bg-base-200/20 dark:bg-base-200/5">
+                <div className="border border-base-300/50 rounded-2xl p-5 flex flex-col gap-4 bg-base-200/20">
                   <h3 className="font-bold text-sm text-base-content border-b pb-2 border-base-300/50 flex items-center gap-2">
                     <Moon className="w-4 h-4 text-brand-orange" />
                     Recursos Nocturnos (Noche)
@@ -737,7 +753,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
               </div>
 
               {/* TIMELAPSE TRANSITIONS */}
-              <div className="border border-base-300/50 rounded-2xl p-5 flex flex-col gap-4 bg-base-200/20 dark:bg-base-200/5">
+              <div className="border border-base-300/50 rounded-2xl p-5 flex flex-col gap-4 bg-base-200/20">
                 <h3 className="font-bold text-sm text-base-content border-b pb-2 border-base-300/50">
                   Transición de Horarios (Día ↔ Noche)
                 </h3>
@@ -758,7 +774,7 @@ export default function BuildingDashboard({ initialFaces }: BuildingDashboardPro
               </div>
 
               {/* ROTATION TRANSITIONS (Disabled if faces <= 1) */}
-              <div className="border border-base-300/50 rounded-2xl p-5 flex flex-col gap-4 bg-base-200/20 dark:bg-base-200/5">
+              <div className="border border-base-300/50 rounded-2xl p-5 flex flex-col gap-4 bg-base-200/20">
                 <div className="flex items-center justify-between border-b pb-2 border-base-300/50">
                   <h3 className="font-bold text-sm text-base-content">
                     Transición de Rotaciones (Entre Caras)

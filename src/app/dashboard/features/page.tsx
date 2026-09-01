@@ -1,5 +1,3 @@
-export const runtime = 'edge';
-
 import { getFeatures } from "@/app/actions/features";
 import FeaturesClient from "@/components/dashboard/features/FeaturesClient";
 import { auth } from "@/auth";
@@ -11,7 +9,9 @@ export default async function SettingsPage() {
   if (!session || session.user.role !== "SUPER_ADMIN") {
     redirect("/dashboard");
   }
-  const initialFeatures = await getFeatures();
+  // Pass `true` so the dashboard always sees all features (including "video")
+  // even when there is no active VIDEO_SIDEBAR media yet.
+  const initialFeatures = await getFeatures(true);
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in justify-center items-center w-full">
