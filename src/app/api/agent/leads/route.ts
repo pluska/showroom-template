@@ -3,8 +3,6 @@ import { getDb } from "@/lib/db";
 import { prospects } from "@/lib/db/schema";
 import { eq, or, isNull } from "drizzle-orm";
 
-export const runtime = "edge";
-
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as any;

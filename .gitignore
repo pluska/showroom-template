@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# credenciales sembradas a mano: nunca al repositorio (ver src/lib/db/insert-users.sql)
+.users.local.sql
 
 # vercel
 .vercel

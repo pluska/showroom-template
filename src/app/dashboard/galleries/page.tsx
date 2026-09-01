@@ -4,8 +4,6 @@ import { getAssetUrl } from "@/utils/assets";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 
-export const runtime = "edge";
-
 export default async function GalleriesPage() {
   const session = await auth();
   if (!session || session.user.role !== "SUPER_ADMIN") {

@@ -13,7 +13,12 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "wrangler d1 migrations apply showroom-db --local",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "wrangler d1 execute showroom-db --local --file=./src/lib/db/seed.sql"
+    "db:seed": "wrangler d1 execute showroom-db --local --file=./src/lib/db/seed.sql",
+    "assets:bump": "node scripts/bump-asset-version.mjs",
+    "db:migrate:remote": "wrangler d1 migrations apply showroom-db --remote",
+    "db:seed:users": "wrangler d1 execute showroom-db --local --file=./src/lib/db/insert-users.sql",
+    "db:seed:users:remote": "wrangler d1 execute showroom-db --remote --file=./src/lib/db/insert-users.sql",
+    "db:seed:remote": "wrangler d1 execute showroom-db --remote --file=./src/lib/db/seed.sql"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -25,18 +30,20 @@
     "daisyui": "^5.5.1-beta.2",
     "drizzle-orm": "^0.45.2",
     "gsap": "^3.14.2",
+    "konva": "^10.3.0",
     "lucide-react": "^0.563.0",
     "mapbox-gl": "^3.18.1",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.31",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-konva": "^19.2.5",
     "react-map-gl": "^8.1.0",
     "resend": "^6.12.3",
+    "use-image": "^1.1.4",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@cloudflare/next-on-pages": "^1.13.16",
     "@cloudflare/workers-types": "^4.20260511.1",
     "@opennextjs/cloudflare": "^1.19.10",
     "@tailwindcss/postcss": "^4",
@@ -46,7 +53,6 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "eslint-plugin-next-on-pages": "^1.13.16",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",

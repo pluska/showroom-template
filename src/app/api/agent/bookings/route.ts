@@ -11,8 +11,6 @@ import {
 import { eq, and, isNull, or, gte, lte } from "drizzle-orm";
 import { Resend } from "resend";
 
-export const runtime = "edge";
-
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as any;
