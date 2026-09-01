@@ -20,13 +20,17 @@ import {
   Settings,
   Shield,
   Send,
+  Video,
+  ExternalLink,
 } from "lucide-react";
 import {
   getAppointments,
   createAppointment,
   updateAppointmentStatus,
   updateAppointmentNotes,
+  updateAppointmentSeller,
   getAvailabilities,
+  getAllAvailabilities,
   saveAvailabilities,
   getSellers,
   transferCalendar,
@@ -35,6 +39,7 @@ import {
   getProspects,
 } from "@/app/actions/calendar";
 import { getUnits } from "@/app/actions/units";
+import { getBookingEnabled, setBookingEnabled as setBookingEnabledAction } from "@/app/actions/booking";
 import config from "@/config/config";
 
 interface CalendarDashboardProps {
@@ -48,7 +53,40 @@ export default function CalendarDashboard({
 }: CalendarDashboardProps) {
   const isUserAdmin = currentUserRole === "SUPER_ADMIN" || currentUserRole === "ADMIN";
 
-  const [activeTab, setActiveTab] = useState<"calendar" | "availability" | "transfers">("calendar");
+  const getAppointmentColorClasses = (app: any) => {
+    const isPast = new Date(app.date).getTime() < Date.now();
+    if (app.status === "COMPLETED") {
+      return {
+        bg: "bg-success/10 border-success text-success",
+        timelineBg: "bg-success/5 border-success text-success-content",
+        badge: "badge-success text-white",
+      };
+    }
+    if (app.status === "CANCELLED") {
+      return {
+        bg: "bg-error/10 border-error text-error",
+        timelineBg: "bg-error/5 border-error text-error-content",
+        badge: "badge-error text-white",
+      };
+    }
+    if (app.status === "SCHEDULED" && isPast) {
+      return {
+        bg: "bg-gray-100 border-gray-400 text-gray-500",
+        timelineBg: "bg-gray-50 border-gray-400 text-gray-500",
+        badge: "bg-gray-400 border-gray-400 text-white",
+      };
+    }
+    // Default SCHEDULED (pendiente) and future
+    return {
+      bg: "bg-info/10 border-info text-info",
+      timelineBg: "bg-info/5 border-info text-info-content",
+      badge: "badge-info text-white",
+    };
+  };
+
+
+
+  const [activeTab, setActiveTab] = useState<"calendar" | "availability" | "sellers_availability" | "transfers">("calendar");
   const [calendarView, setCalendarView] = useState<"month" | "week" | "3days" | "day">("month");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   
@@ -59,6 +97,8 @@ export default function CalendarDashboard({
   const [prospectsList, setProspectsList] = useState<any[]>([]);
   const [availabilitiesList, setAvailabilitiesList] = useState<any[]>([]);
   const [transfersList, setTransfersList] = useState<any[]>([]);
+  const [selectedSellerIdForAvail, setSelectedSellerIdForAvail] = useState<string>("ALL");
+  const [allAvailabilitiesList, setAllAvailabilitiesList] = useState<any[]>([]);
   
   // Filtering & Selection
   const [selectedSellerFilter, setSelectedSellerFilter] = useState<string>("ALL");
@@ -95,6 +135,222 @@ export default function CalendarDashboard({
   const [transferStartDate, setTransferStartDate] = useState("");
   const [transferEndDate, setTransferEndDate] = useState("");
 
+  const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const showNotification = (type: "success" | "error", message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  // Estado del agendamiento público (se refleja en la página de contacto)
+  const [bookingEnabled, setBookingEnabled] = useState(false);
+  const [savingBooking, setSavingBooking] = useState(false);
+
+  useEffect(() => {
+    getBookingEnabled()
+      .then(setBookingEnabled)
+      .catch((err) => console.error("Error leyendo el estado de citas:", err));
+  }, []);
+
+  const handleToggleBooking = async (next: boolean) => {
+    setSavingBooking(true);
+    const previous = bookingEnabled;
+    setBookingEnabled(next); // optimista: el toggle responde de inmediato
+    try {
+      await setBookingEnabledAction(next);
+      showNotification(
+        "success",
+        next
+          ? "Las citas ya están disponibles en la web pública."
+          : "Se ocultó el agendamiento de citas en la web pública."
+      );
+    } catch (error: any) {
+      setBookingEnabled(previous);
+      showNotification("error", error.message || "No se pudo cambiar el estado de las citas.");
+    } finally {
+      setSavingBooking(false);
+    }
+  };
+
+  // Synchronize availability editor state
+  useEffect(() => {
+    if (activeTab === "availability") {
+      const userSlots = availabilitiesList;
+      setAvailSlots(
+        userSlots.map((av) => ({
+          dayOfWeek: av.dayOfWeek,
+          startTime: av.startTime,
+          endTime: av.endTime,
+          meetingType: av.meetingType,
+          slotDuration: av.slotDuration,
+        }))
+      );
+      if (userSlots.length > 0) {
+        setAvailSlotDuration(userSlots[0].slotDuration);
+      } else {
+        setAvailSlotDuration(30);
+      }
+    } else if (activeTab === "sellers_availability") {
+      if (selectedSellerIdForAvail !== "ALL") {
+        const sellerSlots = allAvailabilitiesList.filter((av) => av.userId === selectedSellerIdForAvail);
+        setAvailSlots(
+          sellerSlots.map((av) => ({
+            dayOfWeek: av.dayOfWeek,
+            startTime: av.startTime,
+            endTime: av.endTime,
+            meetingType: av.meetingType,
+            slotDuration: av.slotDuration,
+          }))
+        );
+        if (sellerSlots.length > 0) {
+          setAvailSlotDuration(sellerSlots[0].slotDuration);
+        } else {
+          setAvailSlotDuration(30);
+        }
+      }
+    }
+  }, [activeTab, selectedSellerIdForAvail, availabilitiesList, allAvailabilitiesList]);
+
+  const renderAvailabilityEditor = (
+    targetUserId: string,
+    targetUserName: string,
+    onBack?: () => void
+  ) => {
+    return (
+      <div className="bg-base-100 rounded-xl border border-base-200 p-6 shadow-sm max-w-4xl animate-fade-in animate-duration-200">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h2 className="text-xl font-bold font-primary flex items-center gap-2 text-primary">
+              <Settings className="w-5 h-5" />
+              {targetUserId === currentUserId ? "Configurar mi Disponibilidad" : `Editar disponibilidad de: ${targetUserName}`}
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Define los días y horas disponibles para atender citas virtuales o presenciales.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <button onClick={onBack} className="btn btn-sm btn-outline font-semibold">
+                Volver al resumen
+              </button>
+            )}
+            {targetUserId !== currentUserId && (
+              <div className="badge badge-warning p-3 gap-1 font-semibold">
+                <Shield className="w-3.5 h-3.5" />
+                Modo Admin
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Slot Duration Configuration */}
+        <div className="mb-6 p-4 bg-base-200/50 rounded-xl border border-base-300 max-w-sm flex items-center justify-between">
+          <div>
+            <label className="text-sm font-bold block">Duración de la Cita</label>
+            <span className="text-[11px] text-gray-500">Duración predeterminada por cita</span>
+          </div>
+          <select
+            value={availSlotDuration}
+            onChange={(e) => setAvailSlotDuration(parseInt(e.target.value))}
+            className="select select-bordered select-sm w-32 font-bold"
+          >
+            <option value={15}>15 minutos</option>
+            <option value={30}>30 minutos</option>
+            <option value={45}>45 minutos</option>
+            <option value={60}>60 minutos</option>
+          </select>
+        </div>
+
+        {/* Weekly Availability Grid */}
+        <div className="space-y-6">
+          {daysOfWeekNames.map((dayName, index) => {
+            const adjustedDayIndex = index + 1 === 7 ? 0 : index + 1; // Mon=1, Sun=0
+            const daySlots = availSlots.filter((slot) => slot.dayOfWeek === adjustedDayIndex);
+
+            return (
+              <div key={dayName} className="flex flex-col md:flex-row md:items-start border-b border-base-200 pb-5 last:border-b-0">
+                <div className="md:w-40 font-bold text-sm uppercase text-gray-400 pt-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-primary" />
+                  {dayName}
+                </div>
+
+                <div className="flex-1 flex flex-col gap-3 mt-3 md:mt-0">
+                  {daySlots.map((slot, sIdx) => {
+                    const globalIdx = availSlots.findIndex((s) => s === slot);
+                    return (
+                      <div key={sIdx} className="flex flex-wrap items-center gap-3 bg-base-200/40 p-3 rounded-lg border border-base-300/40 animate-fade-in">
+                        {/* Start Time */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Desde:</span>
+                          <input
+                            type="time"
+                            value={slot.startTime}
+                            onChange={(e) => updateAvailabilitySlot(globalIdx, "startTime", e.target.value)}
+                            className="input input-sm input-bordered font-semibold w-32 md:w-36 min-w-[130px]"
+                          />
+                        </div>
+
+                        {/* End Time */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Hasta:</span>
+                          <input
+                            type="time"
+                            value={slot.endTime}
+                            onChange={(e) => updateAvailabilitySlot(globalIdx, "endTime", e.target.value)}
+                            className="input input-sm input-bordered font-semibold w-32 md:w-36 min-w-[130px]"
+                          />
+                        </div>
+
+                        {/* Meeting Type */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Tipo:</span>
+                          <select
+                            value={slot.meetingType}
+                            onChange={(e) => updateAvailabilitySlot(globalIdx, "meetingType", e.target.value)}
+                            className="select select-sm select-bordered font-semibold"
+                          >
+                            <option value="BOTH">Virtual & Presencial</option>
+                            <option value="VIRTUAL">Sólo Virtual</option>
+                            <option value="IN_PERSON">Sólo Presencial</option>
+                          </select>
+                        </div>
+
+                        {/* Remove Slot */}
+                        <button
+                          onClick={() => removeAvailabilitySlot(globalIdx)}
+                          className="btn btn-ghost btn-sm text-error btn-circle"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  <button
+                    onClick={() => addAvailabilitySlot(adjustedDayIndex)}
+                    className="btn btn-ghost btn-xs w-fit text-primary font-bold hover:bg-primary/10"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Añadir horario
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Submit */}
+        <div className="mt-8 pt-4 border-t border-base-200 flex justify-end">
+          <button
+            onClick={() => handleSaveAvailability(targetUserId)}
+            className="btn bg-primary text-primary-content hover:bg-primary/95 font-bold"
+          >
+            <Check className="w-4 h-4 mr-1" /> Guardar Disponibilidad
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Load Data
   const loadData = async () => {
     startTransition(async () => {
@@ -106,12 +362,23 @@ export default function CalendarDashboard({
         setSellersList(sellers);
 
         const unitsData = await getUnits();
-        setUnitsList(unitsData.filter((u: any) => u.state !== "COMMON_AREA"));
+        const sellable = unitsData.filter(
+          (u: any) => u.type !== "STORAGE" && u.state !== "COMMON_AREA" && u.state !== "SOLD"
+        );
+        const uniqueUnits: any[] = [];
+        const seenIdentifiers = new Set<string>();
+        sellable.forEach((u: any) => {
+          if (!seenIdentifiers.has(u.identifier)) {
+            seenIdentifiers.add(u.identifier);
+            uniqueUnits.push(u);
+          }
+        });
+        setUnitsList(uniqueUnits);
 
         const prospectsData = await getProspects();
         setProspectsList(prospectsData);
 
-        const avails = await getAvailabilities(isUserAdmin && selectedSellerFilter !== "ALL" ? selectedSellerFilter : currentUserId);
+        const avails = await getAvailabilities(currentUserId);
         setAvailabilitiesList(avails);
 
         // Map database availabilities to edit slots
@@ -131,6 +398,9 @@ export default function CalendarDashboard({
         if (isUserAdmin) {
           const transfers = await getTransfers();
           setTransfersList(transfers);
+          
+          const allAvails = await getAllAvailabilities();
+          setAllAvailabilitiesList(allAvails);
         }
       } catch (error) {
         console.error("Error loading calendar data:", error);
@@ -224,36 +494,54 @@ export default function CalendarDashboard({
     );
   };
 
-  const handleSaveAvailability = async () => {
+  const handleSaveAvailability = async (targetId: string) => {
     startTransition(async () => {
       try {
         const slotsWithDuration = availSlots.map((slot) => ({
           ...slot,
           slotDuration: availSlotDuration,
         }));
-        const targetUserId = isUserAdmin && selectedSellerFilter !== "ALL" ? selectedSellerFilter : currentUserId;
-        await saveAvailabilities(targetUserId, slotsWithDuration);
-        alert("Disponibilidad guardada correctamente.");
+        await saveAvailabilities(targetId, slotsWithDuration);
+        showNotification("success", "Disponibilidad guardada correctamente.");
         loadData();
       } catch (error: any) {
-        alert("Error al guardar disponibilidad: " + error.message);
+        showNotification("error", "Error al guardar disponibilidad: " + error.message);
       }
     });
+  };
+
+  const handleEditSellerAvail = (sellerId: string) => {
+    setSelectedSellerIdForAvail(sellerId);
+    const sellerSlots = allAvailabilitiesList.filter((av) => av.userId === sellerId);
+    setAvailSlots(
+      sellerSlots.map((av) => ({
+        dayOfWeek: av.dayOfWeek,
+        startTime: av.startTime,
+        endTime: av.endTime,
+        meetingType: av.meetingType,
+        slotDuration: av.slotDuration,
+      }))
+    );
+    if (sellerSlots.length > 0) {
+      setAvailSlotDuration(sellerSlots[0].slotDuration);
+    } else {
+      setAvailSlotDuration(30);
+    }
   };
 
   // Transfer handlers
   const handleCreateTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transferFromId || !transferToId) {
-      alert("Por favor selecciona los vendedores de origen y destino.");
+      showNotification("error", "Por favor selecciona los vendedores de origen y destino.");
       return;
     }
     if (transferFromId === transferToId) {
-      alert("El vendedor de origen y destino no pueden ser el mismo.");
+      showNotification("error", "El vendedor de origen y destino no pueden ser el mismo.");
       return;
     }
     if (transferType === "TEMPORARY" && (!transferStartDate || !transferEndDate)) {
-      alert("Por favor selecciona el rango de fechas para el traspaso temporal.");
+      showNotification("error", "Por favor selecciona el rango de fechas para el traspaso temporal.");
       return;
     }
 
@@ -266,14 +554,14 @@ export default function CalendarDashboard({
           startDate: transferType === "TEMPORARY" ? new Date(transferStartDate) : new Date(),
           endDate: transferType === "TEMPORARY" ? new Date(transferEndDate) : new Date(),
         });
-        alert("Traspaso configurado con éxito.");
+        showNotification("success", "Traspaso configurado con éxito.");
         setTransferFromId("");
         setTransferToId("");
         setTransferStartDate("");
         setTransferEndDate("");
         loadData();
       } catch (error: any) {
-        alert("Error al configurar el traspaso: " + error.message);
+        showNotification("error", "Error al configurar el traspaso: " + error.message);
       }
     });
   };
@@ -283,10 +571,10 @@ export default function CalendarDashboard({
     startTransition(async () => {
       try {
         await deleteTransfer(id);
-        alert("Traspaso revocado con éxito.");
+        showNotification("success", "Traspaso revocado con éxito.");
         loadData();
       } catch (error: any) {
-        alert("Error al revocar el traspaso: " + error.message);
+        showNotification("error", "Error al revocar el traspaso: " + error.message);
       }
     });
   };
@@ -295,17 +583,16 @@ export default function CalendarDashboard({
   const handleBookAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formProspectName || !formProspectEmail) {
-      alert("Nombre y Correo electrónico son obligatorios.");
+      showNotification("error", "Nombre y Correo electrónico son obligatorios.");
       return;
     }
 
     const [hours, minutes] = bookingTime.split(":");
-    const finalDate = new Date(bookingDate);
-    finalDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    const finalDate = `${bookingDate}T${hours}:${minutes}:00-05:00`;
 
     startTransition(async () => {
       try {
-        await createAppointment({
+        const result = await createAppointment({
           sellerId: isUserAdmin ? (formSellerId || undefined) : currentUserId,
           date: finalDate,
           type: formMeetingType,
@@ -317,7 +604,10 @@ export default function CalendarDashboard({
           notes: formNotes || undefined,
           sendEmail: formSendEmail,
         });
-        alert("Cita agendada correctamente.");
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+        showNotification("success", "Cita agendada correctamente.");
         setIsBookingModalOpen(false);
         // Reset Form
         setFormProspectName("");
@@ -329,7 +619,7 @@ export default function CalendarDashboard({
         setFormSellerId("");
         loadData();
       } catch (error: any) {
-        alert("Error al agendar cita: " + error.message);
+        showNotification("error", "Error al agendar cita: " + error.message);
       }
     });
   };
@@ -341,7 +631,7 @@ export default function CalendarDashboard({
         setSelectedAppointment((prev: any) => (prev ? { ...prev, status } : null));
         loadData();
       } catch (error: any) {
-        alert("Error al actualizar estado: " + error.message);
+        showNotification("error", "Error al actualizar estado: " + error.message);
       }
     });
   };
@@ -352,9 +642,9 @@ export default function CalendarDashboard({
         await updateAppointmentNotes(id, notes);
         setSelectedAppointment((prev: any) => (prev ? { ...prev, notes } : null));
         loadData();
-        alert("Notas guardadas.");
+        showNotification("success", "Notas guardadas.");
       } catch (error: any) {
-        alert("Error al actualizar notas: " + error.message);
+        showNotification("error", "Error al actualizar notas: " + error.message);
       }
     });
   };
@@ -415,31 +705,27 @@ export default function CalendarDashboard({
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-1 mt-1 max-h-[70px] no-scrollbar">
-            {dayApps.map((app) => (
-              <div
-                key={app.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedAppointment(app);
-                }}
-                className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium border border-l-4 transition-all hover:scale-[1.02] ${
-                  app.status === "COMPLETED"
-                    ? "bg-success/10 border-success text-success"
-                    : app.status === "CANCELLED"
-                    ? "bg-error/10 border-error text-error"
-                    : app.isTransferred
-                    ? "bg-warning/15 border-warning text-warning"
-                    : "bg-info/10 border-info text-info"
-                }`}
-                title={`${app.prospectName} (${app.type === "VIRTUAL" ? "Virtual" : "Presencial"})`}
-              >
-                {new Date(app.date).toLocaleTimeString("es-ES", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}{" "}
-                - {app.prospectName}
-              </div>
-            ))}
+            {dayApps.map((app) => {
+              const colors = getAppointmentColorClasses(app);
+              return (
+                <div
+                  key={app.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedAppointment(app);
+                  }}
+                  className={`text-[10px] px-1.5 py-0.5 rounded truncate font-medium border border-l-4 transition-all hover:scale-[1.02] ${colors.bg}`}
+                  title={`${app.prospectName} (${app.type === "VIRTUAL" ? "Virtual" : "Presencial"})${isUserAdmin && selectedSellerFilter === "ALL" ? ` - Asesor: ${app.sellerName}` : ""}`}
+                >
+                  {new Date(app.date).toLocaleTimeString("es-ES", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}{" "}
+                  - {app.prospectName}
+                  {isUserAdmin && selectedSellerFilter === "ALL" && ` (${app.sellerName || "Sin asignar"})`}
+                </div>
+              );
+            })}
           </div>
         </div>
       );
@@ -466,71 +752,73 @@ export default function CalendarDashboard({
 
   const renderTimelineView = (daysCount: number) => {
     const dates = [];
-    const baseDate = new Date(currentDate);
+    const baseDate = new Date(currentDate.getTime() - 5 * 3600000);
 
     if (calendarView === "week") {
-      // Find start of week (Monday)
-      const day = baseDate.getDay();
-      const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1);
-      baseDate.setDate(diff);
+      // Find start of week (Monday = 1, Sunday = 0) in Peru time
+      const day = baseDate.getUTCDay();
+      const diff = baseDate.getUTCDate() - day + (day === 0 ? -6 : 1);
+      baseDate.setUTCDate(diff);
     }
 
     for (let i = 0; i < daysCount; i++) {
       const d = new Date(baseDate);
-      d.setDate(baseDate.getDate() + i);
+      d.setUTCDate(baseDate.getUTCDate() + i);
       dates.push(d);
     }
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4">
         {dates.map((date) => {
-          const dateStr = date.toDateString();
-          const dayApps = appointmentsList.filter(
-            (app) => new Date(app.date).toDateString() === dateStr
-          );
+          const dateStr = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+          const dayApps = appointmentsList.filter((app) => {
+            const appDate = new Date(app.date);
+            const appPeru = new Date(appDate.getTime() - 5 * 3600000);
+            const appPeruStr = `${appPeru.getUTCFullYear()}-${String(appPeru.getUTCMonth() + 1).padStart(2, "0")}-${String(appPeru.getUTCDate()).padStart(2, "0")}`;
+            return appPeruStr === dateStr;
+          });
           
           return (
             <div key={dateStr} className="bg-base-100 rounded-xl p-4 border border-base-200 flex flex-col min-h-[350px] shadow-sm hover:shadow-md transition-shadow">
               <div className="border-b border-base-200 pb-2 mb-3">
                 <p className="text-xs uppercase font-bold text-primary">
-                  {date.toLocaleDateString("es-ES", { weekday: "short" })}
+                  {date.toLocaleDateString("es-ES", { timeZone: "UTC", weekday: "short" })}
                 </p>
                 <h3 className="text-xl font-extrabold text-base-content mt-0.5">
-                  {date.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                  {date.toLocaleDateString("es-ES", { timeZone: "UTC", day: "numeric", month: "short" })}
                 </h3>
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-2 max-h-[300px]">
-                {dayApps.map((app) => (
-                  <div
-                    key={app.id}
-                    onClick={() => setSelectedAppointment(app)}
-                    className={`p-2.5 rounded-lg border border-l-4 cursor-pointer transition-all hover:translate-x-1 ${
-                      app.status === "COMPLETED"
-                        ? "bg-success/5 border-success text-success-content"
-                        : app.status === "CANCELLED"
-                        ? "bg-error/5 border-error text-error-content"
-                        : app.isTransferred
-                        ? "bg-warning/10 border-warning text-warning-content"
-                        : "bg-info/5 border-info text-info-content"
-                    }`}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] font-bold bg-base-200 px-1.5 py-0.5 rounded text-gray-500 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {new Date(app.date).toLocaleTimeString("es-ES", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                      <span className={`badge badge-xs ${app.type === 'VIRTUAL' ? 'badge-info' : 'badge-accent'}`}>
-                        {app.type === 'VIRTUAL' ? 'Virt' : 'Pres'}
-                      </span>
+                {dayApps.map((app) => {
+                  const colors = getAppointmentColorClasses(app);
+                  return (
+                    <div
+                      key={app.id}
+                      onClick={() => setSelectedAppointment(app)}
+                      className={`p-2.5 rounded-lg border border-l-4 cursor-pointer transition-all hover:translate-x-1 ${colors.timelineBg}`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold bg-base-200 px-1.5 py-0.5 rounded text-gray-500 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(app.date).toLocaleTimeString("es-ES", {
+                            timeZone: "America/Lima",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <span className={`badge badge-xs ${app.type === 'VIRTUAL' ? 'badge-info' : 'badge-accent'}`}>
+                          {app.type === 'VIRTUAL' ? 'Virt' : 'Pres'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold truncate">
+                        {app.prospectName}
+                        {isUserAdmin && selectedSellerFilter === "ALL" && ` (${app.sellerName || "Sin asignar"})`}
+                      </p>
+                      <p className="text-[9px] text-gray-400 truncate">{app.prospectEmail}</p>
                     </div>
-                    <p className="text-xs font-bold truncate">{app.prospectName}</p>
-                    <p className="text-[9px] text-gray-400 truncate">{app.prospectEmail}</p>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {dayApps.length === 0 && (
                   <div className="flex-1 flex flex-col items-center justify-center min-h-[120px] text-center text-gray-400">
@@ -542,7 +830,7 @@ export default function CalendarDashboard({
               <button
                 className="mt-3 btn btn-outline btn-xs w-full text-primary hover:bg-primary border-primary/20"
                 onClick={() => {
-                  const dateInputFormat = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+                  const dateInputFormat = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
                   setBookingDate(dateInputFormat);
                   setIsBookingModalOpen(true);
                 }}
@@ -557,27 +845,38 @@ export default function CalendarDashboard({
   };
 
   const getDayLabel = () => {
+    const peruDate = new Date(currentDate.getTime() - 5 * 3600000);
     if (calendarView === "month") {
-      return currentDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+      return peruDate.toLocaleDateString("es-ES", { timeZone: "UTC", month: "long", year: "numeric" });
     } else if (calendarView === "week") {
-      const end = new Date(currentDate);
-      const day = currentDate.getDay();
-      const diffMon = currentDate.getDate() - day + (day === 0 ? -6 : 1);
-      const start = new Date(currentDate);
-      start.setDate(diffMon);
-      end.setDate(diffMon + 6);
-      return `${start.toLocaleDateString("es-ES", { day: "numeric", month: "short" })} - ${end.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}`;
+      const day = peruDate.getUTCDay();
+      const diffMon = peruDate.getUTCDate() - day + (day === 0 ? -6 : 1);
+      const start = new Date(peruDate);
+      start.setUTCDate(diffMon);
+      const end = new Date(peruDate);
+      end.setUTCDate(diffMon + 6);
+      return `${start.toLocaleDateString("es-ES", { timeZone: "UTC", day: "numeric", month: "short" })} - ${end.toLocaleDateString("es-ES", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" })}`;
     } else if (calendarView === "3days") {
-      const end = new Date(currentDate);
-      end.setDate(currentDate.getDate() + 2);
-      return `${currentDate.toLocaleDateString("es-ES", { day: "numeric", month: "short" })} - ${end.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}`;
+      const end = new Date(peruDate);
+      end.setUTCDate(peruDate.getUTCDate() + 2);
+      return `${peruDate.toLocaleDateString("es-ES", { timeZone: "UTC", day: "numeric", month: "short" })} - ${end.toLocaleDateString("es-ES", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" })}`;
     } else {
-      return currentDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      return peruDate.toLocaleDateString("es-ES", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long", year: "numeric" });
     }
   };
 
   return (
     <div className="w-full flex flex-col gap-6">
+      {notification && (
+        <div className="toast toast-top toast-end z-[100]">
+          <div className={`alert shadow-lg ${notification.type === "success" ? "alert-success text-white" : "alert-error text-white"}`}>
+            <div>
+              {notification.type === "success" ? <Check className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header Tabs */}
       <div className="flex flex-wrap justify-between items-center border-b border-base-200 pb-4 gap-4">
         <div className="flex gap-2 bg-base-100 p-1.5 rounded-xl border border-base-300">
@@ -604,22 +903,59 @@ export default function CalendarDashboard({
             Mi Disponibilidad
           </button>
           {isUserAdmin && (
-            <button
-              onClick={() => setActiveTab("transfers")}
-              className={`btn btn-sm border-0 ${
-                activeTab === "transfers"
-                  ? "bg-primary text-primary-content hover:bg-primary/95"
-                  : "btn-ghost text-gray-500"
-              }`}
-            >
-              <ArrowRightLeft className="w-4 h-4 mr-2" />
-              Traspaso de Calendarios
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  setSelectedSellerIdForAvail("ALL");
+                  setActiveTab("sellers_availability");
+                }}
+                className={`btn btn-sm border-0 ${
+                  activeTab === "sellers_availability"
+                    ? "bg-primary text-primary-content hover:bg-primary/95"
+                    : "btn-ghost text-gray-500"
+                }`}
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Disponibilidad de Asesores
+              </button>
+              <button
+                onClick={() => setActiveTab("transfers")}
+                className={`btn btn-sm border-0 ${
+                  activeTab === "transfers"
+                    ? "bg-primary text-primary-content hover:bg-primary/95"
+                    : "btn-ghost text-gray-500"
+                }`}
+              >
+                <ArrowRightLeft className="w-4 h-4 mr-2" />
+                Traspaso de Calendarios
+              </button>
+            </>
           )}
         </div>
 
         {/* Global Loading Spinner */}
         {isPending && <span className="loading loading-spinner text-primary"></span>}
+
+        {/* Interruptor del agendamiento público: mientras esté apagado, la
+            página de contacto no ofrece "Fija una cita con nosotros". */}
+        {isUserAdmin && (
+          <div className="flex items-center gap-3 bg-base-100 border border-base-300 rounded-xl px-4 py-2">
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-gray-700 leading-tight">Activar citas</span>
+              <span className="text-[10px] text-gray-400 leading-tight">
+                {bookingEnabled ? "Visible en la web pública" : "Oculto en la web pública"}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              className="toggle toggle-sm toggle-primary"
+              checked={bookingEnabled}
+              disabled={savingBooking}
+              onChange={(e) => handleToggleBooking(e.target.checked)}
+              aria-label="Activar el agendamiento de citas en la web pública"
+            />
+          </div>
+        )}
 
         {/* Filters & Actions for Calendar Tab */}
         {activeTab === "calendar" && (
@@ -705,6 +1041,27 @@ export default function CalendarDashboard({
             </div>
           </div>
 
+          {/* Legend */}
+          <div className="flex flex-wrap items-center justify-start gap-x-6 gap-y-2 bg-base-100 p-3.5 rounded-xl border border-base-200 shadow-sm text-xs font-semibold text-gray-500">
+            <span className="text-[10px] uppercase font-bold text-gray-400 mr-1">Leyenda de Citas:</span>
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-4 rounded border border-l-4 border-info bg-info/10 flex-shrink-0" />
+              <span>Pendiente (Azul)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-4 rounded border border-l-4 border-success bg-success/10 flex-shrink-0" />
+              <span>Realizada (Verde)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-4 rounded border border-l-4 border-error bg-error/10 flex-shrink-0" />
+              <span>Cancelada (Rojo)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-4 rounded border border-l-4 border-gray-400 bg-gray-100 flex-shrink-0" />
+              <span>Vencida (Gris)</span>
+            </div>
+          </div>
+
           {/* Calendar Body */}
           <div className="w-full">
             {calendarView === "month" && renderMonthView()}
@@ -716,128 +1073,114 @@ export default function CalendarDashboard({
       )}
 
       {/* Tab: Availability */}
-      {activeTab === "availability" && (
-        <div className="bg-base-100 rounded-xl border border-base-200 p-6 shadow-sm max-w-4xl">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h2 className="text-xl font-bold font-primary flex items-center gap-2 text-primary">
-                <Settings className="w-5 h-5" />
-                Configurar mi Disponibilidad
-              </h2>
-              <p className="text-xs text-gray-500 mt-1">
-                Define los días y horas que estarás disponible para atender citas virtuales o presenciales.
-              </p>
-            </div>
+      {activeTab === "availability" && renderAvailabilityEditor(currentUserId, "Mi Disponibilidad")}
 
-            {isUserAdmin && selectedSellerFilter !== "ALL" && (
-              <div className="badge badge-warning p-3 gap-1">
-                <Shield className="w-3.5 h-3.5" />
-                Modo Admin: Editando {sellersList.find((s) => s.id === selectedSellerFilter)?.name}
-              </div>
-            )}
-          </div>
-
-          {/* Slot Duration Configuration */}
-          <div className="mb-6 p-4 bg-base-200/50 rounded-xl border border-base-300 max-w-sm flex items-center justify-between">
-            <div>
-              <label className="text-sm font-bold block">Duración de la Cita</label>
-              <span className="text-[11px] text-gray-500">Duración predeterminada por cita</span>
-            </div>
-            <select
-              value={availSlotDuration}
-              onChange={(e) => setAvailSlotDuration(parseInt(e.target.value))}
-              className="select select-bordered select-sm w-32 font-bold"
-            >
-              <option value={15}>15 minutos</option>
-              <option value={30}>30 minutos</option>
-              <option value={45}>45 minutos</option>
-              <option value={60}>60 minutos</option>
-            </select>
-          </div>
-
-          {/* Weekly Availability Grid */}
-          <div className="space-y-6">
-            {daysOfWeekNames.map((dayName, index) => {
-              const adjustedDayIndex = index + 1 === 7 ? 0 : index + 1; // Mon=1, Sun=0
-              const daySlots = availSlots.filter((slot) => slot.dayOfWeek === adjustedDayIndex);
-
-              return (
-                <div key={dayName} className="flex flex-col md:flex-row md:items-start border-b border-base-200 pb-5 last:border-b-0">
-                  <div className="md:w-40 font-bold text-sm uppercase text-gray-400 pt-2 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-primary" />
-                    {dayName}
-                  </div>
-
-                  <div className="flex-1 flex flex-col gap-3 mt-3 md:mt-0">
-                    {daySlots.map((slot, sIdx) => {
-                      const globalIdx = availSlots.findIndex((s) => s === slot);
-                      return (
-                        <div key={sIdx} className="flex flex-wrap items-center gap-3 bg-base-200/40 p-3 rounded-lg border border-base-300/40 animate-fade-in">
-                          {/* Start Time */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">Desde:</span>
-                            <input
-                              type="time"
-                              value={slot.startTime}
-                              onChange={(e) => updateAvailabilitySlot(globalIdx, "startTime", e.target.value)}
-                              className="input input-sm input-bordered font-semibold w-32 md:w-36 min-w-[130px]"
-                            />
-                          </div>
-
-                          {/* End Time */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">Hasta:</span>
-                            <input
-                              type="time"
-                              value={slot.endTime}
-                              onChange={(e) => updateAvailabilitySlot(globalIdx, "endTime", e.target.value)}
-                              className="input input-sm input-bordered font-semibold w-32 md:w-36 min-w-[130px]"
-                            />
-                          </div>
-
-                          {/* Meeting Type */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">Tipo:</span>
-                            <select
-                              value={slot.meetingType}
-                              onChange={(e) => updateAvailabilitySlot(globalIdx, "meetingType", e.target.value)}
-                              className="select select-sm select-bordered font-semibold"
-                            >
-                              <option value="BOTH">Virtual & Presencial</option>
-                              <option value="VIRTUAL">Sólo Virtual</option>
-                              <option value="IN_PERSON">Sólo Presencial</option>
-                            </select>
-                          </div>
-
-                          {/* Remove Slot */}
-                          <button
-                            onClick={() => removeAvailabilitySlot(globalIdx)}
-                            className="btn btn-ghost btn-sm text-error btn-circle"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-
-                    <button
-                      onClick={() => addAvailabilitySlot(adjustedDayIndex)}
-                      className="btn btn-ghost btn-xs w-fit text-primary font-bold hover:bg-primary/10"
-                    >
-                      <Plus className="w-3.5 h-3.5 mr-1" /> Añadir horario
-                    </button>
-                  </div>
+      {/* Tab: Sellers Availability (Admin Only) */}
+      {activeTab === "sellers_availability" && isUserAdmin && (
+        <div className="w-full flex flex-col gap-6">
+          {selectedSellerIdForAvail === "ALL" ? (
+            <div className="w-full bg-base-100 rounded-xl border border-base-200 p-6 shadow-sm">
+              <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+                <div>
+                  <h2 className="text-xl font-bold font-primary flex items-center gap-2 text-primary">
+                    <Shield className="w-5 h-5 text-primary" />
+                    Disponibilidad de Asesores
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Visualiza la disponibilidad de todos los vendedores al mismo tiempo o edita la agenda de uno en específico.
+                  </p>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Submit */}
-          <div className="mt-8 pt-4 border-t border-base-200 flex justify-end">
-            <button onClick={handleSaveAvailability} className="btn bg-primary text-primary-content hover:bg-primary/90">
-              <Check className="w-4 h-4 mr-1" /> Guardar Disponibilidad
-            </button>
-          </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-500 uppercase">Seleccionar Asesor:</span>
+                  <select
+                    value={selectedSellerIdForAvail}
+                    onChange={(e) => {
+                      if (e.target.value === "ALL") {
+                        setSelectedSellerIdForAvail("ALL");
+                      } else {
+                        handleEditSellerAvail(e.target.value);
+                      }
+                    }}
+                    className="select select-sm select-bordered w-56 text-sm font-semibold"
+                  >
+                    <option value="ALL">Ver todos (Resumen)</option>
+                    {sellersList.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Grid of Advisors' schedules */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {sellersList.map((seller) => {
+                  const sellerAvails = allAvailabilitiesList.filter((av) => av.userId === seller.id);
+                  return (
+                    <div key={seller.id} className="bg-base-100 border border-base-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-bold text-base-content text-lg">{seller.name}</h3>
+                            <span className="text-xs text-gray-400 font-medium">{seller.email}</span>
+                          </div>
+                          <span className={`badge ${seller.role === "SUPER_ADMIN" ? "badge-primary" : seller.role === "ADMIN" ? "badge-secondary" : "badge-outline"} text-xs font-semibold uppercase`}>
+                            {seller.role === "SUPER_ADMIN" ? "S. Admin" : seller.role === "ADMIN" ? "Admin" : "Asesor"}
+                          </span>
+                        </div>
+
+                        {/* Availabilities Summary */}
+                        <div className="space-y-2 mt-4">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Horarios de Atención:</p>
+                          {sellerAvails.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-1.5 text-xs text-gray-600 font-medium">
+                              {daysOfWeekNames.map((dayName, idx) => {
+                                const adjustedDayIndex = idx + 1 === 7 ? 0 : idx + 1; // Mon=1, Sun=0
+                                const daySlots = sellerAvails.filter((s) => s.dayOfWeek === adjustedDayIndex);
+                                if (daySlots.length === 0) return null;
+                                return (
+                                  <div key={dayName} className="flex justify-between border-b border-base-200/50 pb-1">
+                                    <span className="text-gray-400 font-bold">{dayName}:</span>
+                                    <span className="text-right">
+                                      {daySlots.map((slot, sIdx) => (
+                                        <span key={sIdx} className="block">
+                                          {slot.startTime} - {slot.endTime} ({slot.meetingType === "BOTH" ? "Virt/Pres" : slot.meetingType === "VIRTUAL" ? "Virt" : "Pres"})
+                                        </span>
+                                      ))}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-450 italic">Sin horarios configurados.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-6 pt-3 border-t border-base-200">
+                        <button
+                          onClick={() => handleEditSellerAvail(seller.id)}
+                          className="btn btn-sm btn-outline btn-primary w-full font-bold"
+                        >
+                          <Settings className="w-3.5 h-3.5 mr-1" />
+                          Modificar Disponibilidad
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            renderAvailabilityEditor(
+              selectedSellerIdForAvail,
+              sellersList.find((s) => s.id === selectedSellerIdForAvail)?.name || "Asesor",
+              () => setSelectedSellerIdForAvail("ALL")
+            )
+          )}
         </div>
       )}
 
@@ -966,8 +1309,8 @@ export default function CalendarDashboard({
                       <tr key={t.id} className={isOver ? "opacity-40" : ""}>
                         <td className="font-semibold">{t.fromName}</td>
                         <td className="font-semibold text-primary">{t.toName}</td>
-                        <td>{new Date(t.startDate).toLocaleString()}</td>
-                        <td>{new Date(t.endDate).toLocaleString()}</td>
+                        <td>{new Date(t.startDate).toLocaleString("es-ES", { timeZone: "America/Lima" })}</td>
+                        <td>{new Date(t.endDate).toLocaleString("es-ES", { timeZone: "America/Lima" })}</td>
                         <td>
                           {!isOver && (
                             <button
@@ -996,39 +1339,52 @@ export default function CalendarDashboard({
       )}
 
       {/* Modal: Appointment Details */}
-      {selectedAppointment && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-md bg-white border border-base-200 shadow-2xl rounded-2xl p-6 relative">
-            <button
-              onClick={() => setSelectedAppointment(null)}
-              className="btn btn-sm btn-circle btn-ghost absolute right-4 top-4"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      {selectedAppointment && (() => {
+        const isPast = new Date(selectedAppointment.date).getTime() < Date.now();
+        const isExpired = selectedAppointment.status === "SCHEDULED" && isPast;
+        return (
+          <div className="modal modal-open">
+            <div className="modal-box max-w-md bg-white border border-base-200 shadow-2xl rounded-2xl p-6 relative">
+              <button
+                onClick={() => setSelectedAppointment(null)}
+                className="btn btn-sm btn-circle btn-ghost absolute right-4 top-4"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
-            <div className="flex items-center gap-3 border-b border-base-200 pb-4 mb-4">
-              <span className={`p-3 rounded-full ${
-                selectedAppointment.status === "COMPLETED"
-                  ? "bg-success/15 text-success"
-                  : selectedAppointment.status === "CANCELLED"
-                  ? "bg-error/15 text-error"
-                  : "bg-info/15 text-info"
-              }`}>
-                <CalendarIcon className="w-6 h-6" />
-              </span>
-              <div>
-                <h3 className="font-black text-lg text-base-content leading-tight">Detalles de la Cita</h3>
-                <span className={`badge badge-sm mt-1 uppercase font-bold tracking-wider ${
+              <div className="flex items-center gap-3 border-b border-base-200 pb-4 mb-4">
+                <span className={`p-3 rounded-full ${
                   selectedAppointment.status === "COMPLETED"
-                    ? "badge-success text-white"
+                    ? "bg-success/15 text-success"
                     : selectedAppointment.status === "CANCELLED"
-                    ? "badge-error text-white"
-                    : "badge-info text-white"
+                    ? "bg-error/15 text-error"
+                    : isExpired
+                    ? "bg-gray-150 text-gray-500 bg-gray-100"
+                    : "bg-info/15 text-info"
                 }`}>
-                  {selectedAppointment.status === "SCHEDULED" ? "Programada" : selectedAppointment.status === "COMPLETED" ? "Completada" : "Cancelada"}
+                  <CalendarIcon className="w-6 h-6" />
                 </span>
+                <div>
+                  <h3 className="font-black text-lg text-base-content leading-tight">Detalles de la Cita</h3>
+                  <span className={`badge badge-sm mt-1 uppercase font-bold tracking-wider ${
+                    selectedAppointment.status === "COMPLETED"
+                      ? "badge-success text-white"
+                      : selectedAppointment.status === "CANCELLED"
+                      ? "badge-error text-white"
+                      : isExpired
+                      ? "bg-gray-400 border-gray-400 text-white"
+                      : "badge-info text-white"
+                  }`}>
+                    {selectedAppointment.status === "COMPLETED"
+                      ? "Completada"
+                      : selectedAppointment.status === "CANCELLED"
+                      ? "Cancelada"
+                      : isExpired
+                      ? "Vencida"
+                      : "Programada"}
+                  </span>
+                </div>
               </div>
-            </div>
 
             {/* Main Info */}
             <div className="space-y-4">
@@ -1038,6 +1394,7 @@ export default function CalendarDashboard({
                   <p className="font-bold text-gray-400 text-[10px] uppercase">Fecha y Hora</p>
                   <p className="font-bold text-gray-800">
                     {new Date(selectedAppointment.date).toLocaleString("es-ES", {
+                      timeZone: "America/Lima",
                       weekday: "long",
                       day: "numeric",
                       month: "long",
@@ -1067,6 +1424,40 @@ export default function CalendarDashboard({
                   )}
                 </div>
               </div>
+
+              <div className="flex items-start gap-3 text-sm">
+                <Shield className="w-4 h-4 text-primary mt-1 shrink-0" />
+                <div>
+                  <p className="font-bold text-gray-400 text-[10px] uppercase">Representante / Asesor</p>
+                  <p className="font-bold text-gray-800">{selectedAppointment.sellerName || "Sin asignar"}</p>
+                  {selectedAppointment.isTransferred && (
+                    <p className="text-xs text-warning-content bg-warning/10 px-2 py-0.5 rounded mt-1 font-medium inline-block">
+                      Traspaso temporal activo: atendido por {selectedAppointment.effectiveSellerName}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {selectedAppointment.type === "VIRTUAL" && (
+                <div className="flex items-start gap-3 text-sm">
+                  <Video className="w-4 h-4 text-primary mt-1 shrink-0" />
+                  <div>
+                    <p className="font-bold text-gray-400 text-[10px] uppercase">Enlace Google Meet</p>
+                    {selectedAppointment.meetLink ? (
+                      <a
+                        href={selectedAppointment.meetLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary font-bold hover:underline flex items-center gap-1 mt-0.5"
+                      >
+                        Unirse a la Reunión <ExternalLink className="w-3.5 h-3.5 inline" />
+                      </a>
+                    ) : (
+                      <p className="text-gray-500 italic mt-0.5">Enlace no generado o pendiente</p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {selectedAppointment.prospect?.units && selectedAppointment.prospect.units.length > 0 && (
                 <div className="flex items-start gap-3 text-sm">
@@ -1125,11 +1516,58 @@ export default function CalendarDashboard({
                   Se guarda automáticamente al hacer clic fuera del campo de notas.
                 </span>
               </div>
+
+              {/* Admin Transfer Option */}
+              {isUserAdmin && (
+                <div className="border-t border-base-200 pt-4 mt-4">
+                  <p className="font-bold text-gray-400 text-[10px] uppercase mb-1">Traspasar Cita (Definitivo)</p>
+                  <p className="text-[10px] text-gray-400 mb-2">Reasignar esta cita permanentemente a otro vendedor.</p>
+                  <select
+                    value={selectedAppointment.sellerId}
+                    onChange={async (e) => {
+                      const newSellerId = e.target.value;
+                      if (!newSellerId || newSellerId === selectedAppointment.sellerId) return;
+                      
+                      const selectedSeller = sellersList.find((s) => s.id === newSellerId);
+                      const confirmTransfer = confirm(
+                        `¿Estás seguro de traspasar esta cita definitivamente a ${selectedSeller?.name || "este asesor"}?`
+                      );
+                      if (!confirmTransfer) return;
+
+                      startTransition(async () => {
+                        try {
+                          await updateAppointmentSeller(selectedAppointment.id, newSellerId);
+                          setSelectedAppointment((prev: any) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  sellerId: newSellerId,
+                                  sellerName: selectedSeller?.name || "Desconocido",
+                                }
+                              : null
+                          );
+                          loadData();
+                          showNotification("success", "Cita traspasada exitosamente.");
+                        } catch (error: any) {
+                          showNotification("error", "Error al traspasar la cita: " + error.message);
+                        }
+                      });
+                    }}
+                    className="select select-sm select-bordered w-full font-semibold text-xs"
+                  >
+                    {sellersList.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
           <div className="modal-backdrop" onClick={() => setSelectedAppointment(null)} />
         </div>
-      )}
+      ); })()}
 
       {/* Modal: Schedule Booking */}
       {isBookingModalOpen && (

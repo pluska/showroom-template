@@ -25,6 +25,7 @@ interface AppointmentEmailProps {
   sellerName: string;
   sellerEmail: string;
   isForSeller: boolean;
+  meetLink?: string;
 }
 
 export const AppointmentEmail = ({
@@ -38,6 +39,7 @@ export const AppointmentEmail = ({
   sellerName,
   sellerEmail,
   isForSeller,
+  meetLink,
 }: AppointmentEmailProps) => {
   const formattedDate = new Date(date).toLocaleString('es-ES', {
     weekday: 'long',
@@ -49,7 +51,7 @@ export const AppointmentEmail = ({
     hour12: true,
   });
 
-  const projectName = config.company?.buildingName || 'Santa Fe 190';
+  const projectName = config.company?.buildingName || 'Residencial Océano Atlántico';
   const buildingAddress = config.company?.buildingAddress || config.company?.address || '';
   const googleMapsUrl = buildingAddress
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(buildingAddress)}`
@@ -108,7 +110,13 @@ export const AppointmentEmail = ({
                       'Presencial (Dirección de la sala de ventas)'
                     )
                   ) : (
-                    'Reunión Virtual (El asesor se contactará para coordinar el enlace)'
+                    meetLink ? (
+                      <Link href={meetLink} style={linkButton}>
+                        Unirse a Google Meet
+                      </Link>
+                    ) : (
+                      'Reunión Virtual (El asesor se contactará para coordinar el enlace)'
+                    )
                   )}
                 </Column>
               </Row>
@@ -278,6 +286,17 @@ const columnValue = {
 const link = {
   color: '#F59C1D',
   textDecoration: 'underline',
+};
+
+const linkButton = {
+  color: '#ffffff',
+  backgroundColor: '#F59C1D',
+  padding: '8px 14px',
+  borderRadius: '4px',
+  textDecoration: 'none',
+  display: 'inline-block',
+  fontWeight: 'bold',
+  fontSize: '12px',
 };
 
 const footer = {
