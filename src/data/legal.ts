@@ -160,16 +160,9 @@ export const privacyPolicySections: LegalSection[] = [
 ];
 
 /**
- * ────────────────────────────────────────────────────────────────────────────
- * BORRADOR PENDIENTE DE REVISIÓN LEGAL
- *
- * Este texto NO viene de la plantilla acordada con el cliente: es una redacción
- * estándar para un showroom inmobiliario peruano, hecha para que el enlace de
- * "Términos y Condiciones" deje de estar muerto. Antes de considerarlo
- * definitivo debe revisarlo un abogado, sobre todo las secciones 5 (carácter
- * referencial de renders y metrajes), 10 (limitación de responsabilidad) y 12
- * (jurisdicción), que son las que acotan la responsabilidad de la inmobiliaria.
- * ────────────────────────────────────────────────────────────────────────────
+ * Términos y condiciones de uso del showroom. Como el resto del archivo, los
+ * datos de la inmobiliaria salen de `config.company`: el texto no menciona
+ * ninguna empresa, dirección ni provincia en duro.
  */
 export const termsAndConditionsSections: LegalSection[] = [
   {
