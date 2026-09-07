@@ -562,7 +562,7 @@ const Contact = () => {
                                   className="mt-1 w-4 h-4 border-gray-300 rounded text-brand-primary focus:ring-brand-primary cursor-pointer" 
                               />
                               <label htmlFor="terms" className="text-xs text-gray-500 cursor-pointer select-none">
-                                  Acepto las <a href="#" className="underline font-bold text-gray-600 hover:text-brand-primary">Políticas de Privacidad</a> y <a href="#" className="underline font-bold text-gray-600 hover:text-brand-primary">Términos y Condiciones</a> de {config.company?.realStateName}. *
+                                  Acepto las <a href="/politica-de-privacidad" target="_blank" rel="noopener noreferrer" className="underline font-bold text-gray-600 hover:text-brand-primary">Políticas de Privacidad</a> y <a href="/terminos-y-condiciones" target="_blank" rel="noopener noreferrer" className="underline font-bold text-gray-600 hover:text-brand-primary">Términos y Condiciones</a> de {config.company?.realStateName}. *
                               </label>
                           </div>
                           {errors.terms && <span className="text-[10px] text-red-500 pl-7">{errors.terms}</span>}

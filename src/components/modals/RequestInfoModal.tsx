@@ -235,7 +235,7 @@ export default function RequestInfoModal({ isOpen, onClose, unitId, floorId }: R
                         className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary/20 accent-brand-primary"
                     />
                     <label htmlFor="terms" className="text-xs text-gray-500 cursor-pointer select-none">
-                      Acepto las <a href="#" className="underline font-bold hover:text-brand-primary">Políticas de Privacidad</a> y <a href="#" className="underline font-bold hover:text-brand-primary">Términos y Condiciones</a>. *
+                      Acepto las <a href="/politica-de-privacidad" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-brand-primary">Políticas de Privacidad</a> y <a href="/terminos-y-condiciones" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-brand-primary">Términos y Condiciones</a>. *
                     </label>
                  </div>
                  {errors.terms && <span className="text-[10px] text-red-500 block pl-7">{errors.terms}</span>}

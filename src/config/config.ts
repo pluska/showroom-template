@@ -22,6 +22,14 @@ export interface ConfigProps {
     buildingAddress: string;
     email: string;
     website: string;
+    // Provincia/departamento donde opera la inmobiliaria. Aparece en el
+    // encabezado de las páginas legales ("ubicada en ..., Lima, Perú"): no
+    // todos los proyectos están en Lima, así que no se puede fijar en el texto.
+    city: string;
+    country: string;
+    // Teléfono de la inmobiliaria para las páginas legales. Si queda vacío, la
+    // fila del teléfono no se pinta en lugar de mostrar un campo hueco.
+    phone?: string;
     maquetaUrl?: string;
     buildingSocials: {
       facebook: string;
@@ -69,6 +77,9 @@ const config: ConfigProps = {
     buildingAddress: "Building Address",
     email: "sales@project-domain.com",
     website: "https://project-domain.com/",
+    city: "Lima",
+    country: "Perú",
+    phone: "",
     maquetaUrl: "https://rvisioon.shapespark.com/edificio_santa_fe/",
     buildingSocials: {
       facebook: "https://facebook.com/project",
